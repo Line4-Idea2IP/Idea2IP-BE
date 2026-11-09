@@ -1,5 +1,6 @@
 package com.line4.idea2ip.domain.user.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -26,7 +27,7 @@ public class User {
     private String loginId;
 
     @Column(name = "password_hash", nullable = false)
-    @Getter(AccessLevel.NONE)
+    @JsonIgnore
     private String passwordHash;
 
     @Builder
