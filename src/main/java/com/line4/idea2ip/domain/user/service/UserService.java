@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.user.service;
 
 import com.line4.idea2ip.domain.user.dto.SignupReq;
 import com.line4.idea2ip.domain.user.dto.SignupRes;
+import com.line4.idea2ip.domain.user.dto.UserInfoRes;
 import com.line4.idea2ip.domain.user.entity.User;
 import com.line4.idea2ip.domain.user.repository.UserRepository;
 import com.line4.idea2ip.global.exception.BaseException;
@@ -56,6 +57,17 @@ public class UserService {
         return SignupRes.builder()
                 .userId(savedUser.getUserId())
                 .loginId(savedUser.getLoginId())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public UserInfoRes getMyInfo(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.USER_NOT_FOUND));
+
+        return UserInfoRes.builder()
+                .userId(user.getUserId())
+                .loginId(user.getLoginId())
                 .build();
     }
 }
