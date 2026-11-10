@@ -18,6 +18,7 @@ public class ProjectListRes {
         private Long projectId;
         private String title;
         private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
         private ArtworkType artworkType;
         private String thumbnailUrl;
     }

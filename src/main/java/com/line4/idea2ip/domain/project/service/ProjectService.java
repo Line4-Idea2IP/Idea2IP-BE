@@ -50,11 +50,13 @@ public class ProjectService {
     public ProjectListRes getMyProjects(Long userId) {
         verifyUser(userId);
 
-        List<ProjectListRes.ProjectItem> projects = projectRepository.findAllByUser_UserId(userId).stream()
+        List<Project> recentProjects = projectRepository.findAllByUser_UserIdOrderByUpdateAtDescProjectIdDesc(userId);
+        List<ProjectListRes.ProjectItem> projects = recentProjects.stream()
                 .map(project -> ProjectListRes.ProjectItem.builder()
                         .projectId(project.getProjectId())
                         .title(project.getTitle())
                         .createdAt(project.getCreatedAt())
+                        .updatedAt(project.getUpdateAt())
                         .artworkType(project.getArtworkType())
                         .thumbnailUrl(project.getThumbnailUrl())
                         .build())
@@ -79,6 +81,7 @@ public class ProjectService {
                 .title(project.getTitle())
                 .description(project.getDescription())
                 .createdAt(project.getCreatedAt())
+                .artworkType(project.getArtworkType())
                 .build();
     }
 

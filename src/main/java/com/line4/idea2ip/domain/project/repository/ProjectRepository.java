@@ -12,7 +12,7 @@ import java.util.Optional;
 
 public interface ProjectRepository extends JpaRepository<Project, Long> {
 
-    List<Project> findAllByUser_UserId(Long userId);
+    List<Project> findAllByUser_UserIdOrderByUpdateAtDescProjectIdDesc(Long userId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Project p where p.projectId = :projectId")

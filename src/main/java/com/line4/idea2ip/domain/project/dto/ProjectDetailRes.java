@@ -1,5 +1,6 @@
 package com.line4.idea2ip.domain.project.dto;
 
+import com.line4.idea2ip.domain.project.entity.ArtworkType;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -12,4 +13,5 @@ public class ProjectDetailRes {
     private String title;
     private String description;
     private LocalDateTime createdAt;
+    private ArtworkType artworkType;
 }
