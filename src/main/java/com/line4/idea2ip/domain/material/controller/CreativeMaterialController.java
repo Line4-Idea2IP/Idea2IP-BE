@@ -7,10 +7,12 @@ import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.response.SuccessResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -34,5 +36,19 @@ public class CreativeMaterialController {
     ) {
         MaterialCreateRes response = materialService.createMaterial(userDetails.getUserId(), projectId, req, files);
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
+    }
+
+    @GetMapping("/api/materials/{materialId}/files/{fileId}")
+    public ResponseEntity<byte[]> getMaterialImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("materialId") Long materialId,
+            @PathVariable("fileId") Long fileId
+    ) {
+        CreativeMaterialService.MaterialImage image =
+                materialService.getMaterialImage(userDetails.getUserId(), materialId, fileId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(image.contentType())
+                .body(image.content());
     }
 }
