@@ -14,25 +14,39 @@ import javax.imageio.stream.MemoryCacheImageInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Slf4j
 public class LocalImageStorage {
 
     private final Path directory;
     private final String filenamePrefix;
+    private final Pattern filenamePattern;
     private final ErrorResponseCode invalidImage;
 
     public LocalImageStorage(String directory, String filenamePrefix, ErrorResponseCode invalidImage) {
         this.directory = Path.of(directory).toAbsolutePath().normalize();
         this.filenamePrefix = filenamePrefix;
+        this.filenamePattern = Pattern.compile(Pattern.quote(filenamePrefix) + "[0-9]+\\.(png|jpg)");
         this.invalidImage = invalidImage;
     }
 
     public Path getDirectory() {
         return directory;
+    }
+
+    public byte[] read(String filename) throws IOException {
+        if (!filenamePattern.matcher(filename).matches()) {
+            throw new NoSuchFileException(filename);
+        }
+        try (var input = Files.newInputStream(directory.resolve(filename), LinkOption.NOFOLLOW_LINKS)) {
+            return input.readAllBytes();
+        }
     }
 
     public StoredImage store(MultipartFile file) {

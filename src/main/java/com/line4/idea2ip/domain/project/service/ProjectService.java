@@ -69,12 +69,7 @@ public class ProjectService {
 
     @Transactional(readOnly = true)
     public ProjectDetailRes getProjectDetail(Long userId, Long projectId) {
-        verifyUser(userId);
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
-
-        verifyOwner(project, userId);
+        Project project = getOwnedProject(userId, projectId);
 
         return ProjectDetailRes.builder()
                 .projectId(project.getProjectId())
@@ -100,6 +95,15 @@ public class ProjectService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public Project getOwnedProject(Long userId, Long projectId) {
+        verifyUser(userId);
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
+        verifyOwner(project, userId);
+        return project;
+    }
+
     public Project getOwnedProjectForUpdate(Long userId, Long projectId) {
         verifyUser(userId);
         Project project = projectRepository.findByIdForUpdate(projectId)
@@ -114,7 +118,7 @@ public class ProjectService {
         }
     }
 
-    private void verifyOwner(Project project, Long userId) {
+    public void verifyOwner(Project project, Long userId) {
         if (!project.getUser().getUserId().equals(userId)) {
             throw new BaseException(ErrorResponseCode.ACCESS_DENIED_REQUEST);
         }
