@@ -114,7 +114,7 @@ public class ProjectService {
         }
     }
 
-    private void verifyOwner(Project project, Long userId) {
+    public void verifyOwner(Project project, Long userId) {
         if (!project.getUser().getUserId().equals(userId)) {
             throw new BaseException(ErrorResponseCode.ACCESS_DENIED_REQUEST);
         }
