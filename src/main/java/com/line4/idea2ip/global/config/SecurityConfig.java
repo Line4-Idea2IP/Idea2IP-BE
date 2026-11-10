@@ -1,6 +1,7 @@
 package com.line4.idea2ip.global.config;
 
 import com.line4.idea2ip.domain.auth.repository.RevokedAccessTokenRepository;
+import com.line4.idea2ip.domain.project.storage.ProjectThumbnailStorage;
 import com.line4.idea2ip.global.jwt.JwtAuthenticationFilter;
 import com.line4.idea2ip.global.jwt.JwtTokenUtil;
 import com.line4.idea2ip.global.response.ErrorResponse;
@@ -45,6 +46,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, ProjectThumbnailStorage.RESOURCE_PATTERN).permitAll()
+                        .requestMatchers(HttpMethod.HEAD, ProjectThumbnailStorage.RESOURCE_PATTERN).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint((request, response, exception) -> {

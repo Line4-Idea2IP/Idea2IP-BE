@@ -5,6 +5,7 @@ import com.line4.idea2ip.domain.project.dto.ProjectCreateRes;
 import com.line4.idea2ip.domain.project.dto.ProjectListRes;
 import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.repository.ProjectRepository;
+import com.line4.idea2ip.domain.project.storage.ProjectThumbnailStorage;
 import com.line4.idea2ip.domain.user.entity.User;
 import com.line4.idea2ip.domain.user.repository.UserRepository;
 import com.line4.idea2ip.global.exception.BaseException;
@@ -12,7 +13,6 @@ import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 
 @Service
@@ -21,16 +21,18 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final ProjectThumbnailStorage thumbnailStorage;
 
     @Transactional
     public ProjectCreateRes createProject(Long userId, ProjectCreateReq req) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.UNAUTHORIZED_REQUEST));
-
         Project project = Project.builder()
                 .user(user)
                 .title(req.getTitle())
                 .description(req.getDescription())
+                .artworkType(req.getArtworkType())
+                .thumbnailUrl(thumbnailStorage.store(req.getThumbnail()))
                 .build();
 
         Project savedProject = projectRepository.save(project);
@@ -52,6 +54,8 @@ public class ProjectService {
                         .projectId(project.getProjectId())
                         .title(project.getTitle())
                         .createdAt(project.getCreatedAt())
+                        .artworkType(project.getArtworkType())
+                        .thumbnailUrl(project.getThumbnailUrl())
                         .build())
                 .toList();
 
@@ -59,4 +63,5 @@ public class ProjectService {
                 .projects(projects)
                 .build();
     }
+
 }

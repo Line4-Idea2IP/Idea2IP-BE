@@ -19,6 +19,7 @@ public enum ErrorResponseCode implements BaseResponseCode {
     PASSWORD_TOO_LONG("USER_400", BAD_REQUEST, "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다."),
     USER_NOT_FOUND("USER_404", NOT_FOUND, "사용자 정보를 찾을 수 없습니다."),
     DUPLICATE_LOGIN_ID("USER_409", CONFLICT, "이미 사용 중인 로그인 아이디입니다."),
+    INVALID_PROJECT_THUMBNAIL("PROJECT_400", BAD_REQUEST, "프로젝트 썸네일은 PNG 또는 JPG 이미지여야 합니다."),
     SERVER_ERROR("GLOBAL_500", INTERNAL_SERVER_ERROR, "서버 내부에서 알 수 없는 에러가 발생했습니다.");
 
     private final String code;

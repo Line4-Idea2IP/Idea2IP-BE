@@ -1,11 +1,16 @@
 package com.line4.idea2ip.domain.project.dto;
 
+import com.line4.idea2ip.domain.project.entity.ArtworkType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.springframework.web.multipart.MultipartFile;
 
 @Getter
+@Setter
 @NoArgsConstructor
 public class ProjectCreateReq {
 
@@ -14,4 +19,9 @@ public class ProjectCreateReq {
     private String title;
 
     private String description;
+
+    @NotNull(message = "작품 유형을 선택해주세요.")
+    private ArtworkType artworkType;
+
+    private MultipartFile thumbnail;
 }
