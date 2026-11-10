@@ -1,0 +1,38 @@
+package com.line4.idea2ip.domain.material.controller;
+
+import com.line4.idea2ip.domain.material.dto.MaterialCreateReq;
+import com.line4.idea2ip.domain.material.dto.MaterialCreateRes;
+import com.line4.idea2ip.domain.material.service.CreativeMaterialService;
+import com.line4.idea2ip.global.jwt.CustomUserDetails;
+import com.line4.idea2ip.global.response.SuccessResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+
+@RestController
+@RequiredArgsConstructor
+public class CreativeMaterialController {
+
+    private final CreativeMaterialService materialService;
+
+    @PostMapping(value = "/api/projects/{projectId}/materials", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SuccessResponse<MaterialCreateRes>> createMaterial(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId,
+            @Valid @RequestPart("material") MaterialCreateReq req,
+            @RequestPart("files") List<MultipartFile> files
+    ) {
+        MaterialCreateRes response = materialService.createMaterial(userDetails.getUserId(), projectId, req, files);
+        return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
+    }
+}

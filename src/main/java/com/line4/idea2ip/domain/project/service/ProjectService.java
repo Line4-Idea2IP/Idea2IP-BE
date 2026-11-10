@@ -87,11 +87,7 @@ public class ProjectService {
 
     @Transactional
     public ProjectThumbnailRes updateThumbnail(Long userId, Long projectId, MultipartFile thumbnail) {
-        verifyUser(userId);
-
-        Project project = projectRepository.findByIdForUpdate(projectId)
-                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
-        verifyOwner(project, userId);
+        Project project = getOwnedProjectForUpdate(userId, projectId);
 
         String previousUrl = project.getThumbnailUrl();
         String thumbnailUrl = thumbnailStorage.store(thumbnail);
@@ -102,6 +98,14 @@ public class ProjectService {
                 .projectId(project.getProjectId())
                 .thumbnailUrl(thumbnailUrl)
                 .build();
+    }
+
+    public Project getOwnedProjectForUpdate(Long userId, Long projectId) {
+        verifyUser(userId);
+        Project project = projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
+        verifyOwner(project, userId);
+        return project;
     }
 
     private void verifyUser(Long userId) {
