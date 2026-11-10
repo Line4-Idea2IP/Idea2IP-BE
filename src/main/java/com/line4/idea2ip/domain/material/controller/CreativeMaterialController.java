@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.material.controller;
 
 import com.line4.idea2ip.domain.material.dto.MaterialCreateReq;
 import com.line4.idea2ip.domain.material.dto.MaterialCreateRes;
+import com.line4.idea2ip.domain.material.dto.MaterialDetailRes;
 import com.line4.idea2ip.domain.material.dto.MaterialListRes;
 import com.line4.idea2ip.domain.material.service.CreativeMaterialService;
 import com.line4.idea2ip.global.jwt.CustomUserDetails;
@@ -45,6 +46,15 @@ public class CreativeMaterialController {
             @PathVariable("projectId") Long projectId
     ) {
         MaterialListRes response = materialService.getMaterials(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @GetMapping("/api/materials/{materialId}")
+    public ResponseEntity<SuccessResponse<MaterialDetailRes>> getMaterialDetail(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("materialId") Long materialId
+    ) {
+        MaterialDetailRes response = materialService.getMaterialDetail(userDetails.getUserId(), materialId);
         return ResponseEntity.ok(SuccessResponse.from(response));
     }
 
