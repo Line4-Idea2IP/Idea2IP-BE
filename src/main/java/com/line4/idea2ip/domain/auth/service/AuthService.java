@@ -2,9 +2,11 @@ package com.line4.idea2ip.domain.auth.service;
 
 import com.line4.idea2ip.domain.auth.dto.LoginReq;
 import com.line4.idea2ip.domain.auth.dto.LoginRes;
+import com.line4.idea2ip.domain.auth.repository.RevokedAccessTokenRepository;
 import com.line4.idea2ip.domain.user.entity.User;
 import com.line4.idea2ip.domain.user.repository.UserRepository;
 import com.line4.idea2ip.global.exception.BaseException;
+import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.jwt.JwtTokenProvider;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +26,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RevokedAccessTokenRepository revokedAccessTokenRepository;
 
     @Transactional(readOnly = true)
     public LoginRes login(LoginReq req) {
@@ -41,5 +45,10 @@ public class AuthService {
         return LoginRes.builder()
                 .accessToken(jwtTokenProvider.createAccessToken(user.getUserId()))
                 .build();
+    }
+
+    public void logout(CustomUserDetails userDetails) {
+        revokedAccessTokenRepository.deleteExpired(Instant.now());
+        revokedAccessTokenRepository.revoke(userDetails.getTokenId(), userDetails.getExpiresAt());
     }
 }
