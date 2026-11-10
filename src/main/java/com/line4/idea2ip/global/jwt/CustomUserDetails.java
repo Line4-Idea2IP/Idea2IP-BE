@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
@@ -13,6 +14,8 @@ import java.util.List;
 public class CustomUserDetails implements UserDetails {
 
     private final Long userId;
+    private final String tokenId;
+    private final Instant expiresAt;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

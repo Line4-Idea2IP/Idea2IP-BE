@@ -1,10 +1,12 @@
 package com.line4.idea2ip.global.config;
 
+import com.line4.idea2ip.domain.auth.repository.RevokedAccessTokenRepository;
 import com.line4.idea2ip.global.jwt.JwtAuthenticationFilter;
 import com.line4.idea2ip.global.jwt.JwtTokenUtil;
 import com.line4.idea2ip.global.response.ErrorResponse;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import jakarta.servlet.DispatcherType;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +19,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration
@@ -25,8 +28,16 @@ import tools.jackson.databind.ObjectMapper;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenUtil jwtTokenUtil, ObjectMapper objectMapper)
-            throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtTokenUtil jwtTokenUtil,
+            RevokedAccessTokenRepository revokedAccessTokenRepository,
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+            ObjectMapper objectMapper
+    ) throws Exception {
+        JwtAuthenticationFilter jwtAuthenticationFilter =
+                new JwtAuthenticationFilter(jwtTokenUtil, revokedAccessTokenRepository, exceptionResolver);
+
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -43,7 +54,7 @@ public class SecurityConfig {
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     objectMapper.writeValue(response.getOutputStream(), error);
                 }))
-                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenUtil), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }
