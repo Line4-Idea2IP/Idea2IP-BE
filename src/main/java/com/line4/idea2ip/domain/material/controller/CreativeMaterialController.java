@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.material.controller;
 
 import com.line4.idea2ip.domain.material.dto.MaterialCreateReq;
 import com.line4.idea2ip.domain.material.dto.MaterialCreateRes;
+import com.line4.idea2ip.domain.material.dto.MaterialListRes;
 import com.line4.idea2ip.domain.material.service.CreativeMaterialService;
 import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.response.SuccessResponse;
@@ -36,6 +37,15 @@ public class CreativeMaterialController {
     ) {
         MaterialCreateRes response = materialService.createMaterial(userDetails.getUserId(), projectId, req, files);
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
+    }
+
+    @GetMapping("/api/projects/{projectId}/materials")
+    public ResponseEntity<SuccessResponse<MaterialListRes>> getMaterials(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        MaterialListRes response = materialService.getMaterials(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok(SuccessResponse.from(response));
     }
 
     @GetMapping("/api/materials/{materialId}/files/{fileId}")
