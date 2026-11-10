@@ -13,10 +13,7 @@ public record MaterialListRes(List<MaterialItem> materials) {
             String description,
             LocalDate productionDate,
             LocalDateTime createdAt,
-            List<FileItem> files
+            List<MaterialFileRes> files
     ) {
-    }
-
-    public record FileItem(Long fileId, String fileName, String imageUrl) {
     }
 }

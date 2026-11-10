@@ -2,6 +2,8 @@ package com.line4.idea2ip.domain.material.service;
 
 import com.line4.idea2ip.domain.material.dto.MaterialCreateReq;
 import com.line4.idea2ip.domain.material.dto.MaterialCreateRes;
+import com.line4.idea2ip.domain.material.dto.MaterialDetailRes;
+import com.line4.idea2ip.domain.material.dto.MaterialFileRes;
 import com.line4.idea2ip.domain.material.dto.MaterialListRes;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterial;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterialFile;
@@ -92,24 +94,29 @@ public class CreativeMaterialService {
                         material.getDescription(),
                         material.getProductionDate(),
                         material.getCreatedAt(),
-                        material.getFiles().stream()
-                                .map(file -> new MaterialListRes.FileItem(
-                                        file.getFileId(),
-                                        file.getOriginalFileName(),
-                                        "/api/materials/" + material.getMaterialId() + "/files/" + file.getFileId()
-                                ))
-                                .toList()
+                        getMaterialFiles(material)
                 ))
                 .toList();
         return new MaterialListRes(materials);
     }
 
     @Transactional(readOnly = true)
-    public MaterialImage getMaterialImage(Long userId, Long materialId, Long fileId) {
-        CreativeMaterial material = materialRepository.findById(materialId)
-                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
-        projectService.verifyOwner(material.getProject(), userId);
+    public MaterialDetailRes getMaterialDetail(Long userId, Long materialId) {
+        CreativeMaterial material = getOwnedMaterial(userId, materialId);
+        return new MaterialDetailRes(
+                material.getMaterialId(),
+                material.getMaterialType(),
+                material.getTitle(),
+                material.getDescription(),
+                material.getUsedAi(),
+                material.getProductionDate(),
+                getMaterialFiles(material)
+        );
+    }
 
+    @Transactional(readOnly = true)
+    public MaterialImage getMaterialImage(Long userId, Long materialId, Long fileId) {
+        getOwnedMaterial(userId, materialId);
         CreativeMaterialFile file = fileRepository.findByFileIdAndMaterial_MaterialId(fileId, materialId)
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_IMAGE_NOT_FOUND));
         try {
@@ -120,6 +127,23 @@ public class CreativeMaterialService {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to read material image " + fileId, e);
         }
+    }
+
+    private CreativeMaterial getOwnedMaterial(Long userId, Long materialId) {
+        CreativeMaterial material = materialRepository.findById(materialId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
+        projectService.verifyOwner(material.getProject(), userId);
+        return material;
+    }
+
+    private List<MaterialFileRes> getMaterialFiles(CreativeMaterial material) {
+        return material.getFiles().stream()
+                .map(file -> new MaterialFileRes(
+                        file.getFileId(),
+                        file.getOriginalFileName(),
+                        "/api/materials/" + material.getMaterialId() + "/files/" + file.getFileId()
+                ))
+                .toList();
     }
 
     public record MaterialImage(MediaType contentType, byte[] content) {
