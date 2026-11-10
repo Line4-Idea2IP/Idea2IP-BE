@@ -69,12 +69,7 @@ public class ProjectService {
 
     @Transactional(readOnly = true)
     public ProjectDetailRes getProjectDetail(Long userId, Long projectId) {
-        verifyUser(userId);
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
-
-        verifyOwner(project, userId);
+        Project project = getOwnedProject(userId, projectId);
 
         return ProjectDetailRes.builder()
                 .projectId(project.getProjectId())
@@ -98,6 +93,15 @@ public class ProjectService {
                 .projectId(project.getProjectId())
                 .thumbnailUrl(thumbnailUrl)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Project getOwnedProject(Long userId, Long projectId) {
+        verifyUser(userId);
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
+        verifyOwner(project, userId);
+        return project;
     }
 
     public Project getOwnedProjectForUpdate(Long userId, Long projectId) {

@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.material.service;
 
 import com.line4.idea2ip.domain.material.dto.MaterialCreateReq;
 import com.line4.idea2ip.domain.material.dto.MaterialCreateRes;
+import com.line4.idea2ip.domain.material.dto.MaterialListRes;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterial;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterialFile;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
@@ -76,6 +77,31 @@ public class CreativeMaterialService {
                 .map(file -> new MaterialCreateRes.FileItem(file.getFileId(), file.getOriginalFileName()))
                 .toList();
         return new MaterialCreateRes(savedMaterial.getMaterialId(), projectId, savedMaterial.getTitle(), savedFiles);
+    }
+
+    @Transactional(readOnly = true)
+    public MaterialListRes getMaterials(Long userId, Long projectId) {
+        projectService.getOwnedProject(userId, projectId);
+
+        List<MaterialListRes.MaterialItem> materials = materialRepository
+                .findAllByProject_ProjectIdOrderByMaterialOrderAsc(projectId).stream()
+                .map(material -> new MaterialListRes.MaterialItem(
+                        material.getMaterialId(),
+                        material.getMaterialOrder(),
+                        material.getTitle(),
+                        material.getDescription(),
+                        material.getProductionDate(),
+                        material.getCreatedAt(),
+                        material.getFiles().stream()
+                                .map(file -> new MaterialListRes.FileItem(
+                                        file.getFileId(),
+                                        file.getOriginalFileName(),
+                                        "/api/materials/" + material.getMaterialId() + "/files/" + file.getFileId()
+                                ))
+                                .toList()
+                ))
+                .toList();
+        return new MaterialListRes(materials);
     }
 
     @Transactional(readOnly = true)
