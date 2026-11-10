@@ -53,12 +53,15 @@ public class Project extends BaseEntity {
     private long inputRevision;
 
     @Builder
-    public Project(User user, String title, String description, ArtworkType artworkType, String thumbnailUrl) {
+    public Project(User user, String title, String description, ArtworkType artworkType) {
         this.user = user;
         this.title = title;
         this.description = description;
         this.artworkType = artworkType;
-        this.thumbnailUrl = thumbnailUrl;
         this.inputRevision = 0L;
+    }
+
+    public void updateThumbnail(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
     }
 }

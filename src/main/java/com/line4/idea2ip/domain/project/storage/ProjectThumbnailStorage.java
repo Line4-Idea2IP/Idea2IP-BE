@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Component
 @Slf4j
@@ -27,6 +28,7 @@ public class ProjectThumbnailStorage implements WebMvcConfigurer {
 
     private static final String URL_PREFIX = "/uploads/project-thumbnails/";
     public static final String RESOURCE_PATTERN = URL_PREFIX + "**";
+    private static final Pattern THUMBNAIL_FILENAME = Pattern.compile("thumbnail-[0-9]+\\.(png|jpg)");
 
     private final Path directory;
 
@@ -43,7 +45,7 @@ public class ProjectThumbnailStorage implements WebMvcConfigurer {
 
     public String store(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            return null;
+            throw new BaseException(ErrorResponseCode.INVALID_PROJECT_THUMBNAIL);
         }
 
         Path target = null;
@@ -60,6 +62,24 @@ public class ProjectThumbnailStorage implements WebMvcConfigurer {
             log.error("Failed to store project thumbnail", e);
             throw new BaseException(ErrorResponseCode.SERVER_ERROR);
         }
+    }
+
+    public void deleteAfterCommit(String thumbnailUrl) {
+        if (thumbnailUrl == null || !thumbnailUrl.startsWith(URL_PREFIX)) {
+            return;
+        }
+        String filename = thumbnailUrl.substring(URL_PREFIX.length());
+        if (!THUMBNAIL_FILENAME.matcher(filename).matches()) {
+            return;
+        }
+
+        Path target = directory.resolve(filename);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                deleteFile(target);
+            }
+        });
     }
 
     private String imageExtension(byte[] content) {

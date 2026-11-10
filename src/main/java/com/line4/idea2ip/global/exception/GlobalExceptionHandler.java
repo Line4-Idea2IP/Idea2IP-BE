@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -46,7 +47,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorResponse.getHttpStatus()).body(errorResponse);
     }
 
-    @ExceptionHandler({MultipartException.class, HttpMediaTypeNotSupportedException.class})
+    @ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class, HttpMediaTypeNotSupportedException.class})
     public ResponseEntity<ErrorResponse<?>> handleInvalidRequestContent(Exception e) {
         log.error("Invalid request content: {}", e.getMessage(), e);
         ErrorResponse<?> errorResponse = ErrorResponse.from(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY);
