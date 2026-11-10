@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.project.service;
 
 import com.line4.idea2ip.domain.project.dto.ProjectCreateReq;
 import com.line4.idea2ip.domain.project.dto.ProjectCreateRes;
+import com.line4.idea2ip.domain.project.dto.ProjectDetailRes;
 import com.line4.idea2ip.domain.project.dto.ProjectListRes;
 import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.repository.ProjectRepository;
@@ -13,6 +14,7 @@ import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 @Service
@@ -64,4 +66,24 @@ public class ProjectService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public ProjectDetailRes getProjectDetail(Long userId, Long projectId) {
+        if (!userRepository.existsById(userId)) {
+            throw new BaseException(ErrorResponseCode.UNAUTHORIZED_REQUEST);
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
+
+        if (!project.getUser().getUserId().equals(userId)) {
+            throw new BaseException(ErrorResponseCode.ACCESS_DENIED_REQUEST);
+        }
+
+        return ProjectDetailRes.builder()
+                .projectId(project.getProjectId())
+                .title(project.getTitle())
+                .description(project.getDescription())
+                .createdAt(project.getCreatedAt())
+                .build();
+    }
 }

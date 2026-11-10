@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.project.controller;
 
 import com.line4.idea2ip.domain.project.dto.ProjectCreateReq;
 import com.line4.idea2ip.domain.project.dto.ProjectCreateRes;
+import com.line4.idea2ip.domain.project.dto.ProjectDetailRes;
 import com.line4.idea2ip.domain.project.dto.ProjectListRes;
 import com.line4.idea2ip.domain.project.service.ProjectService;
 import com.line4.idea2ip.global.jwt.CustomUserDetails;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,4 +44,12 @@ public class ProjectController {
         return ResponseEntity.ok(SuccessResponse.from(response));
     }
 
+    @GetMapping("/{projectId}")
+    public ResponseEntity<SuccessResponse<ProjectDetailRes>> getProjectDetail(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        ProjectDetailRes response = projectService.getProjectDetail(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok(SuccessResponse.from(response));
+    }
 }
