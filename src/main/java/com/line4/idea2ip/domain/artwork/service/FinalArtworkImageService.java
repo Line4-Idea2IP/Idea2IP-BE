@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,10 +50,15 @@ public class FinalArtworkImageService {
         String previousPath = artwork.getImagePath();
         LocalImageStorage.StoredImage image = imageStorage.store(file);
         artwork.updateImage(image.fileName(), originalFileName);
-        if (previousPath != null) {
-            imageStorage.deleteAfterCommit(previousPath);
-        }
+        deleteImageAfterCommit(previousPath);
         return new ArtworkImageRes(artwork.getArtworkId(), projectId, originalFileName);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void deleteImageAfterCommit(String imagePath) {
+        if (imagePath != null) {
+            imageStorage.deleteAfterCommit(imagePath);
+        }
     }
 
     @Transactional(readOnly = true)

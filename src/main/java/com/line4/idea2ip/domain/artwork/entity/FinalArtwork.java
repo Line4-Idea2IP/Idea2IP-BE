@@ -55,4 +55,9 @@ public class FinalArtwork extends BaseEntity {
         this.imagePath = imagePath;
         this.originalFileName = originalFileName;
     }
+
+    public void updateInfo(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
 }

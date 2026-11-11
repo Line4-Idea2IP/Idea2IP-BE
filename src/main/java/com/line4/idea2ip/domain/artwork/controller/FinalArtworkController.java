@@ -4,6 +4,8 @@ import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateReq;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateRes;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkDetailRes;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkImageRes;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkUpdateReq;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkUpdateRes;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkImageService;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkService;
 import com.line4.idea2ip.global.jwt.CustomUserDetails;
@@ -15,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,6 +53,25 @@ public class FinalArtworkController {
     ) {
         ArtworkDetailRes response = artworkService.getArtwork(userDetails.getUserId(), projectId);
         return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @PatchMapping(value = "/{projectId}/artwork", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<SuccessResponse<ArtworkUpdateRes>> updateArtwork(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId,
+            @Valid @RequestBody ArtworkUpdateReq req
+    ) {
+        ArtworkUpdateRes response = artworkService.updateArtwork(userDetails.getUserId(), projectId, req);
+        return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @DeleteMapping("/{projectId}/artwork")
+    public ResponseEntity<Void> deleteArtwork(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        artworkService.deleteArtwork(userDetails.getUserId(), projectId);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping(value = "/{projectId}/artwork/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
