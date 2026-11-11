@@ -16,7 +16,7 @@ public interface RevokedAccessTokenRepository extends JpaRepository<RevokedAcces
     @Query(value = """
             INSERT INTO revoked_access_tokens (token_id, expires_at)
             VALUES (:tokenId, :expiresAt)
-            ON DUPLICATE KEY UPDATE token_id = token_id
+            ON CONFLICT (token_id) DO NOTHING
             """, nativeQuery = true)
     void revoke(@Param("tokenId") String tokenId, @Param("expiresAt") Instant expiresAt);
 
