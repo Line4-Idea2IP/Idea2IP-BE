@@ -3,6 +3,7 @@ package com.line4.idea2ip.domain.material.controller;
 import com.line4.idea2ip.domain.material.dto.MaterialDetailRes;
 import com.line4.idea2ip.domain.material.dto.MaterialFilesRes;
 import com.line4.idea2ip.domain.material.dto.MaterialUpdateReq;
+import com.line4.idea2ip.domain.material.service.CreativeMaterialFileService;
 import com.line4.idea2ip.domain.material.service.CreativeMaterialService;
 import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.response.SuccessResponse;
@@ -33,6 +34,7 @@ import java.util.List;
 public class CreativeMaterialController {
 
     private final CreativeMaterialService materialService;
+    private final CreativeMaterialFileService materialFileService;
 
     @PostMapping(value = "/{materialId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<SuccessResponse<MaterialFilesRes>> addMaterialFiles(
@@ -40,7 +42,7 @@ public class CreativeMaterialController {
             @PathVariable("materialId") Long materialId,
             @RequestPart("files") List<MultipartFile> files
     ) {
-        MaterialFilesRes response = materialService.addMaterialFiles(userDetails.getUserId(), materialId, files);
+        MaterialFilesRes response = materialFileService.addMaterialFiles(userDetails.getUserId(), materialId, files);
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
     }
 
@@ -51,7 +53,7 @@ public class CreativeMaterialController {
             @RequestPart(value = "newFiles", required = false) List<MultipartFile> newFiles,
             @RequestParam(value = "deleteFileIds", required = false) List<Long> deleteFileIds
     ) {
-        MaterialFilesRes response = materialService.updateMaterialFiles(
+        MaterialFilesRes response = materialFileService.updateMaterialFiles(
                 userDetails.getUserId(), materialId, newFiles, deleteFileIds);
         return ResponseEntity.ok(SuccessResponse.from(response));
     }
@@ -90,8 +92,8 @@ public class CreativeMaterialController {
             @PathVariable("materialId") Long materialId,
             @PathVariable("fileId") Long fileId
     ) {
-        CreativeMaterialService.MaterialImage image =
-                materialService.getMaterialImage(userDetails.getUserId(), materialId, fileId);
+        CreativeMaterialFileService.MaterialImage image =
+                materialFileService.getMaterialImage(userDetails.getUserId(), materialId, fileId);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .contentType(image.contentType())
