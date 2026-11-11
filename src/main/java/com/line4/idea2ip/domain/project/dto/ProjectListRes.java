@@ -1,6 +1,7 @@
 package com.line4.idea2ip.domain.project.dto;
 
 import com.line4.idea2ip.domain.project.entity.ArtworkType;
+import com.line4.idea2ip.domain.report.ReportModels.ReportStatus;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -11,6 +12,9 @@ import java.util.List;
 @Builder
 public class ProjectListRes {
     private List<ProjectItem> projects;
+    private Summary summary;
+
+    public record Summary(long totalProjects, long completedProjects, long inProgressProjects) {}
 
     @Getter
     @Builder
@@ -21,5 +25,8 @@ public class ProjectListRes {
         private LocalDateTime updatedAt;
         private ArtworkType artworkType;
         private String thumbnailUrl;
+        private ReportStatus reportStatus;
+        private Long latestReadyVersionId;
+        private boolean reportUpdateAvailable;
     }
 }

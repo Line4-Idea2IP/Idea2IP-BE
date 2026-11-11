@@ -9,11 +9,15 @@ import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.repository.ProjectRepository;
 import com.line4.idea2ip.domain.project.storage.ProjectThumbnailStorage;
 import com.line4.idea2ip.domain.user.entity.User;
+import com.line4.idea2ip.domain.report.ProjectReportReadService;
+import com.line4.idea2ip.domain.report.ReportModels.ProjectReportStatus;
+import com.line4.idea2ip.domain.report.ReportModels.ReportStatus;
 import com.line4.idea2ip.domain.user.repository.UserRepository;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -26,6 +30,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final ProjectThumbnailStorage thumbnailStorage;
+    private final ProjectReportReadService reportRead;
 
     @Transactional
     public ProjectCreateRes createProject(Long userId, ProjectCreateReq req) {
@@ -46,32 +51,43 @@ public class ProjectService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ProjectListRes getMyProjects(Long userId) {
         verifyUser(userId);
 
         List<Project> recentProjects = projectRepository.findAllByUser_UserIdOrderByUpdateAtDescProjectIdDesc(userId);
-        List<ProjectListRes.ProjectItem> projects = recentProjects.stream()
-                .map(project -> ProjectListRes.ProjectItem.builder()
+        var statuses = reportRead.statuses(recentProjects);
+        List<ProjectListRes.ProjectItem> projects = recentProjects.stream().map(project -> {
+            var status = statuses.getOrDefault(project.getProjectId(), ProjectReportStatus.empty());
+            return ProjectListRes.ProjectItem.builder()
                         .projectId(project.getProjectId())
                         .title(project.getTitle())
                         .createdAt(project.getCreatedAt())
                         .updatedAt(project.getUpdateAt())
                         .artworkType(project.getArtworkType())
                         .thumbnailUrl(project.getThumbnailUrl())
-                        .build())
-                .toList();
+                        .reportStatus(status.reportStatus())
+                        .latestReadyVersionId(status.latestReadyVersionId())
+                        .reportUpdateAvailable(status.reportUpdateAvailable())
+                        .build();
+        }).toList();
+        long completed = projects.stream().filter(item -> item.getReportStatus() == ReportStatus.READY).count();
 
         return ProjectListRes.builder()
                 .projects(projects)
+                .summary(new ProjectListRes.Summary(projects.size(), completed, projects.size() - completed))
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ProjectDetailRes getProjectDetail(Long userId, Long projectId) {
         Project project = getOwnedProject(userId, projectId);
 
+        var status = reportRead.statuses(List.of(project)).getOrDefault(projectId, ProjectReportStatus.empty());
         return ProjectDetailRes.builder()
+                .reportStatus(status.reportStatus())
+                .latestReadyVersionId(status.latestReadyVersionId())
+                .reportUpdateAvailable(status.reportUpdateAvailable())
                 .projectId(project.getProjectId())
                 .title(project.getTitle())
                 .description(project.getDescription())
