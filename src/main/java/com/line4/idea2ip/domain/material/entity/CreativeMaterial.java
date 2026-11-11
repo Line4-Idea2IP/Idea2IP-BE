@@ -66,4 +66,13 @@ public class CreativeMaterial extends BaseEntity {
     public void addFile(String originalFileName, String storageKey, String fileType) {
         files.add(new CreativeMaterialFile(this, originalFileName, storageKey, fileType));
     }
+
+    public void updateInfo(MaterialType materialType, String title, String description,
+                           String usedAi, LocalDate productionDate) {
+        this.materialType = materialType;
+        this.title = title;
+        this.description = description;
+        this.usedAi = usedAi;
+        this.productionDate = productionDate;
+    }
 }
