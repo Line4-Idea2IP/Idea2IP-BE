@@ -22,6 +22,7 @@ public class FinalArtworkService {
 
     private final ProjectService projectService;
     private final FinalArtworkRepository artworkRepository;
+    private final FinalArtworkImageService artworkImageService;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ArtworkCreateRes createArtwork(Long userId, Long projectId, ArtworkCreateReq req) {
@@ -66,5 +67,14 @@ public class FinalArtworkService {
                 artwork.getDescription(),
                 artwork.getOriginalFileName()
         );
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void deleteArtwork(Long userId, Long projectId) {
+        projectService.getOwnedProjectForUpdate(userId, projectId);
+        FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
+        artworkImageService.deleteImageAfterCommit(artwork.getImagePath());
+        artworkRepository.delete(artwork);
     }
 }
