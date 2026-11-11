@@ -39,3 +39,4 @@ out/
 ### properties ###
 src/main/resources/application-secret.properties
 /uploads/
+/private/report-pdfs/

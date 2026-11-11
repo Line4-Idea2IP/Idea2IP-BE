@@ -7,6 +7,9 @@ import com.line4.idea2ip.domain.material.entity.CreativeMaterialFile;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialFileRepository;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.project.service.ProjectService;
+import com.line4.idea2ip.domain.project.service.ProjectInputChanges;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Operation;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Type;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import com.line4.idea2ip.global.storage.LocalImageStorage;
@@ -28,14 +31,16 @@ import java.util.Set;
 public class CreativeMaterialFileService {
 
     private final ProjectService projectService;
+    private final ProjectInputChanges inputChanges;
     private final CreativeMaterialRepository materialRepository;
     private final CreativeMaterialFileRepository fileRepository;
     private final LocalImageStorage imageStorage;
 
     public CreativeMaterialFileService(ProjectService projectService, CreativeMaterialRepository materialRepository,
-                                       CreativeMaterialFileRepository fileRepository,
+                                       CreativeMaterialFileRepository fileRepository, ProjectInputChanges inputChanges,
                                        @Value("${idea2ip.material-image-dir}") String directory) {
         this.projectService = projectService;
+        this.inputChanges = inputChanges;
         this.materialRepository = materialRepository;
         this.fileRepository = fileRepository;
         this.imageStorage = new LocalImageStorage(directory, "material-", ErrorResponseCode.INVALID_MATERIAL_IMAGE);
@@ -49,6 +54,7 @@ public class CreativeMaterialFileService {
         }
 
         storeMaterialFiles(material, files);
+        inputChanges.record(material.getProject(), Type.MATERIAL, Operation.UPDATED, materialId);
         materialRepository.flush();
         return new MaterialFilesRes(materialId, getMaterialFiles(material));
     }
@@ -74,6 +80,7 @@ public class CreativeMaterialFileService {
         storeMaterialFiles(material, filesToAdd);
         material.removeFiles(filesToDelete);
         deleteFilesAfterCommit(filesToDelete);
+        inputChanges.record(material.getProject(), Type.MATERIAL, Operation.UPDATED, materialId);
         materialRepository.flush();
         return new MaterialFilesRes(materialId, getMaterialFiles(material));
     }
@@ -113,6 +120,9 @@ public class CreativeMaterialFileService {
     }
 
     private CreativeMaterial getOwnedMaterialForUpdate(Long userId, Long materialId) {
+        Long projectId = materialRepository.findProjectIdByMaterialId(materialId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
+        projectService.getOwnedProjectForUpdate(userId, projectId);
         CreativeMaterial material = materialRepository.findByIdForUpdate(materialId)
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
         projectService.verifyOwner(material.getProject(), userId);

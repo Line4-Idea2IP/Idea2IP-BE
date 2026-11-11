@@ -9,6 +9,10 @@ import com.line4.idea2ip.domain.artwork.entity.FinalArtwork;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.service.ProjectService;
+import com.line4.idea2ip.domain.project.service.ProjectInputChanges;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Operation;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Type;
+import java.util.Objects;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FinalArtworkService {
 
     private final ProjectService projectService;
+    private final ProjectInputChanges inputChanges;
     private final FinalArtworkRepository artworkRepository;
     private final FinalArtworkImageService artworkImageService;
 
@@ -33,6 +38,7 @@ public class FinalArtworkService {
 
         FinalArtwork artwork = new FinalArtwork(project, req.title(), req.description());
         FinalArtwork savedArtwork = artworkRepository.save(artwork);
+        inputChanges.record(project, Type.FINAL_ARTWORK, Operation.ADDED, savedArtwork.getArtworkId());
         return new ArtworkCreateRes(savedArtwork.getArtworkId(), projectId, savedArtwork.getTitle());
     }
 
@@ -55,12 +61,15 @@ public class FinalArtworkService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ArtworkUpdateRes updateArtwork(Long userId, Long projectId, ArtworkUpdateReq req) {
-        projectService.getOwnedProjectForUpdate(userId, projectId);
+        Project project = projectService.getOwnedProjectForUpdate(userId, projectId);
         FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
         String title = req.getTitle() != null ? req.getTitle() : artwork.getTitle();
         String description = req.isDescriptionPresent() ? req.getDescription() : artwork.getDescription();
-        artwork.updateInfo(title, description);
+        if (!Objects.equals(title, artwork.getTitle()) || !Objects.equals(description, artwork.getDescription())) {
+            artwork.updateInfo(title, description);
+            inputChanges.record(project, Type.FINAL_ARTWORK, Operation.UPDATED, artwork.getArtworkId());
+        }
         return new ArtworkUpdateRes(
                 artwork.getArtworkId(),
                 artwork.getTitle(),
@@ -71,10 +80,11 @@ public class FinalArtworkService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteArtwork(Long userId, Long projectId) {
-        projectService.getOwnedProjectForUpdate(userId, projectId);
+        Project project = projectService.getOwnedProjectForUpdate(userId, projectId);
         FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
         artworkImageService.deleteImageAfterCommit(artwork.getImagePath());
         artworkRepository.delete(artwork);
+        inputChanges.record(project, Type.FINAL_ARTWORK, Operation.DELETED, artwork.getArtworkId());
     }
 }

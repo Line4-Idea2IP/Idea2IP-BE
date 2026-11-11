@@ -24,8 +24,12 @@ public final class InterviewResponses {
     public record BlockingReason(MaterialType type, String message) {
     }
 
+    public record MaterialWarning(MaterialType type, String message) {
+    }
+
     public record ReadinessRes(boolean canStart, List<InterviewFieldState> fieldStates,
-                               List<MaterialCheck> materialChecks, List<BlockingReason> blockingReasons) {
+                               List<MaterialCheck> materialChecks, List<BlockingReason> blockingReasons,
+                               List<MaterialWarning> warnings) {
     }
 
     public record InterviewStateRes(Long interviewId, AiInterview.Status status, List<InterviewFieldState> fieldStates,

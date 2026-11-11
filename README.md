@@ -32,6 +32,13 @@ PostgreSQL에 데이터베이스를 생성하고, 아래 환경변수를 설정�
 
 Windows에서는 저장소 루트에서 `.\gradlew.bat bootRun`을 실행합니다. Hibernate가 현재 설정에 따라 스키마를 생성·갱신하며, 인터뷰의 항목별 상태와 질문 출처 목록은 PostgreSQL `jsonb`로 저장합니다.
 
+## 창작 기여와 Copyright Brief
+
+기여 후보 생성과 리포트 생성은 서버가 백그라운드에서 처리합니다. 기본 AI 모드는 `mock`입니다. 실제 생성에는 `BRIEF_AI_MODE=live`, `BRIEF_AI_BASE_URL`과 FastAPI 설정에 맞는 `BRIEF_AI_TOKEN`을 지정합니다.
+
+- `BRIEF_PDF_FONT`에는 한글 글리프를 포함한 TrueType 폰트 파일의 경로를 지정합니다. Windows에서는 기본으로 맑은 고딕을 사용합니다. Linux 배포 환경에는 서버가 읽을 수 있는 폰트를 제공해야 합니다.
+- `BRIEF_PDF_DIR`은 비공개 PDF 저장 디렉터리입니다. 기본값은 `private/report-pdfs`입니다. 배포 시 서버가 읽고 쓸 수 있는 영속 디렉터리로 연결합니다. 여러 백엔드 인스턴스를 운영하는 경우 같은 저장소를 사용합니다.
+
 ## ✨ 주요 기능
 
 | 구분 | 주요 기능 |
