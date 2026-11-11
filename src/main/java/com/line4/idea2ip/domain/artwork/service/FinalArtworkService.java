@@ -3,6 +3,8 @@ package com.line4.idea2ip.domain.artwork.service;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateReq;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateRes;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkDetailRes;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkUpdateReq;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkUpdateRes;
 import com.line4.idea2ip.domain.artwork.entity.FinalArtwork;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
@@ -47,6 +49,22 @@ public class FinalArtworkService {
                 artwork.getDescription(),
                 artwork.getOriginalFileName(),
                 fileUrl
+        );
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ArtworkUpdateRes updateArtwork(Long userId, Long projectId, ArtworkUpdateReq req) {
+        projectService.getOwnedProjectForUpdate(userId, projectId);
+        FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
+        String title = req.getTitle() != null ? req.getTitle() : artwork.getTitle();
+        String description = req.isDescriptionPresent() ? req.getDescription() : artwork.getDescription();
+        artwork.updateInfo(title, description);
+        return new ArtworkUpdateRes(
+                artwork.getArtworkId(),
+                artwork.getTitle(),
+                artwork.getDescription(),
+                artwork.getOriginalFileName()
         );
     }
 }
