@@ -8,20 +8,20 @@ import com.line4.idea2ip.domain.user.repository.UserRepository;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
-import java.sql.SQLException;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private static final int BCRYPT_MAX_PASSWORD_BYTES = 72;
-    private static final int MYSQL_DUPLICATE_ENTRY = 1062;
+    private static final String UNIQUE_VIOLATION = "23505";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -47,8 +47,9 @@ public class UserService {
         try {
             savedUser = userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
-            if (e.getMostSpecificCause() instanceof SQLException sqlException
-                    && sqlException.getErrorCode() == MYSQL_DUPLICATE_ENTRY) {
+            if (e.getCause() instanceof ConstraintViolationException violation
+                    && UNIQUE_VIOLATION.equals(violation.getSQLState())
+                    && User.LOGIN_ID_CONSTRAINT.equals(violation.getConstraintName())) {
                 throw new BaseException(ErrorResponseCode.DUPLICATE_LOGIN_ID);
             }
             throw e;

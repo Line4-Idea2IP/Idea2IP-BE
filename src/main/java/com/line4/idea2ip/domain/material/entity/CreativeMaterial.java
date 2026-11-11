@@ -37,8 +37,7 @@ public class CreativeMaterial extends BaseEntity {
     @Column(nullable = false, length = 30)
     private MaterialType materialType;
 
-    @Lob
-    @Column(nullable = false, columnDefinition = "LONGTEXT")
+    @Column(nullable = false, columnDefinition = "text")
     private String title;
 
     @Column(columnDefinition = "TEXT")

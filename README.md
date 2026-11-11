@@ -17,10 +17,20 @@
 | **Language** | Java |
 | **Framework** | Spring Boot |
 | **ORM** | Spring Data JPA |
-| **Database** | MySQL |
+| **Database** | PostgreSQL |
 | **Build Tool** | Gradle |
 
 ---
+
+## 로컬 실행
+
+PostgreSQL에 데이터베이스를 생성하고, 아래 환경변수를 설정한 뒤 애플리케이션을 실행합니다.
+
+- `DATABASE_URL` (예시 `jdbc:postgresql://localhost:5432/idea2ip`)
+- `DATABASE_USERNAME`, `DATABASE_PASSWORD` (PostgreSQL 접속 정보)
+- `JWT_SECRET`, `JWT_ACCESS_EXPIRATION` (JWT 서명 키와 만료 시간, 밀리초)
+
+Windows에서는 저장소 루트에서 `.\gradlew.bat bootRun`을 실행합니다. Hibernate가 현재 설정에 따라 스키마를 생성·갱신하며, 인터뷰의 항목별 상태와 질문 출처 목록은 PostgreSQL `jsonb`로 저장합니다.
 
 ## ✨ 주요 기능
 

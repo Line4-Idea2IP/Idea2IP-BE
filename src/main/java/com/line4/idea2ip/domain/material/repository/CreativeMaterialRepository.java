@@ -27,13 +27,14 @@ public interface CreativeMaterialRepository extends JpaRepository<CreativeMateri
     @EntityGraph(attributePaths = "files")
     List<CreativeMaterial> findAllByProject_ProjectIdOrderByMaterialOrderAsc(Long projectId);
 
-    // Ascending updates fill the deleted order first without violating the unique project/order constraint.
+    @Query("""
+            select m.materialId from CreativeMaterial m
+            where m.project.projectId = :projectId and m.materialOrder > :deletedOrder
+            order by m.materialOrder
+            """)
+    List<Long> findIdsAfterOrder(@Param("projectId") Long projectId, @Param("deletedOrder") int deletedOrder);
+
     @Modifying
-    @Query(value = """
-            UPDATE creative_materials
-            SET material_order = material_order - 1
-            WHERE project_id = :projectId AND material_order > :deletedOrder
-            ORDER BY material_order ASC
-            """, nativeQuery = true)
-    void decreaseOrdersAfter(@Param("projectId") Long projectId, @Param("deletedOrder") int deletedOrder);
+    @Query("update CreativeMaterial m set m.materialOrder = m.materialOrder - 1 where m.materialId = :materialId")
+    void decreaseOrder(@Param("materialId") Long materialId);
 }
