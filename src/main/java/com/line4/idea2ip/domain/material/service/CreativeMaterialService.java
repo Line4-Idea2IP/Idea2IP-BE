@@ -6,6 +6,7 @@ import com.line4.idea2ip.domain.material.dto.MaterialDetailRes;
 import com.line4.idea2ip.domain.material.dto.MaterialFileRes;
 import com.line4.idea2ip.domain.material.dto.MaterialListRes;
 import com.line4.idea2ip.domain.material.dto.MaterialFilesRes;
+import com.line4.idea2ip.domain.material.dto.MaterialUpdateReq;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterial;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterialFile;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
@@ -25,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -65,9 +67,7 @@ public class CreativeMaterialService {
 
     @Transactional
     public MaterialFilesRes addMaterialFiles(Long userId, Long materialId, List<MultipartFile> files) {
-        CreativeMaterial material = materialRepository.findByIdForUpdate(materialId)
-                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
-        projectService.verifyOwner(material.getProject(), userId);
+        CreativeMaterial material = getOwnedMaterialForUpdate(userId, materialId);
         if (files.isEmpty()) {
             throw new BaseException(ErrorResponseCode.INVALID_MATERIAL_IMAGE);
         }
@@ -110,15 +110,27 @@ public class CreativeMaterialService {
     @Transactional(readOnly = true)
     public MaterialDetailRes getMaterialDetail(Long userId, Long materialId) {
         CreativeMaterial material = getOwnedMaterial(userId, materialId);
-        return new MaterialDetailRes(
-                material.getMaterialId(),
-                material.getMaterialType(),
-                material.getTitle(),
-                material.getDescription(),
-                material.getUsedAi(),
-                material.getProductionDate(),
-                getMaterialFiles(material)
-        );
+        return toMaterialDetail(material);
+    }
+
+    @Transactional
+    public MaterialDetailRes updateMaterial(Long userId, Long materialId, MaterialUpdateReq req) {
+        CreativeMaterial material = getOwnedMaterialForUpdate(userId, materialId);
+        MaterialType materialType = req.getMaterialType() != null ? req.getMaterialType() : material.getMaterialType();
+        String title = req.getTitle() != null ? req.getTitle() : material.getTitle();
+        String description = req.isDescriptionPresent() ? req.getDescription() : material.getDescription();
+        LocalDate productionDate = req.isProductionDatePresent() ? req.getProductionDate() : material.getProductionDate();
+        String usedAi = req.isUsedAiPresent() ? req.getUsedAi() : material.getUsedAi();
+
+        if (materialType != MaterialType.AI_ASSISTED && StringUtils.hasText(req.getUsedAi())) {
+            throw new BaseException(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY);
+        }
+        if (materialType != MaterialType.AI_ASSISTED || !StringUtils.hasText(usedAi)) {
+            usedAi = null;
+        }
+
+        material.updateInfo(materialType, title, description, usedAi, productionDate);
+        return toMaterialDetail(material);
     }
 
     @Transactional(readOnly = true)
@@ -141,6 +153,25 @@ public class CreativeMaterialService {
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
         projectService.verifyOwner(material.getProject(), userId);
         return material;
+    }
+
+    private CreativeMaterial getOwnedMaterialForUpdate(Long userId, Long materialId) {
+        CreativeMaterial material = materialRepository.findByIdForUpdate(materialId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
+        projectService.verifyOwner(material.getProject(), userId);
+        return material;
+    }
+
+    private MaterialDetailRes toMaterialDetail(CreativeMaterial material) {
+        return new MaterialDetailRes(
+                material.getMaterialId(),
+                material.getMaterialType(),
+                material.getTitle(),
+                material.getDescription(),
+                material.getUsedAi(),
+                material.getProductionDate(),
+                getMaterialFiles(material)
+        );
     }
 
     private List<MaterialFileRes> getMaterialFiles(CreativeMaterial material) {
