@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,6 +63,15 @@ public class FinalArtworkController {
     ) {
         ArtworkUpdateRes response = artworkService.updateArtwork(userDetails.getUserId(), projectId, req);
         return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @DeleteMapping("/{projectId}/artwork")
+    public ResponseEntity<Void> deleteArtwork(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        artworkService.deleteArtwork(userDetails.getUserId(), projectId);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping(value = "/{projectId}/artwork/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
