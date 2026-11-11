@@ -5,6 +5,7 @@ import com.line4.idea2ip.domain.material.dto.MaterialCreateRes;
 import com.line4.idea2ip.domain.material.dto.MaterialDetailRes;
 import com.line4.idea2ip.domain.material.dto.MaterialFileRes;
 import com.line4.idea2ip.domain.material.dto.MaterialListRes;
+import com.line4.idea2ip.domain.material.dto.MaterialFilesRes;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterial;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterialFile;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
@@ -44,12 +45,8 @@ public class CreativeMaterialService {
     }
 
     @Transactional
-    public MaterialCreateRes createMaterial(Long userId, Long projectId, MaterialCreateReq req,
-                                            List<MultipartFile> files) {
+    public MaterialCreateRes createMaterial(Long userId, Long projectId, MaterialCreateReq req) {
         Project project = projectService.getOwnedProjectForUpdate(userId, projectId);
-        if (files.isEmpty()) {
-            throw new BaseException(ErrorResponseCode.INVALID_MATERIAL_IMAGE);
-        }
         if (req.materialType() != MaterialType.AI_ASSISTED && StringUtils.hasText(req.usedAi())) {
             throw new BaseException(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY);
         }
@@ -61,6 +58,19 @@ public class CreativeMaterialService {
         String usedAi = StringUtils.hasText(req.usedAi()) ? req.usedAi() : null;
         CreativeMaterial material = new CreativeMaterial(project, materialOrder, req.materialType(),
                 req.title(), req.description(), usedAi, req.productionDate());
+
+        CreativeMaterial savedMaterial = materialRepository.save(material);
+        return new MaterialCreateRes(savedMaterial.getMaterialId(), projectId, savedMaterial.getTitle(), List.of());
+    }
+
+    @Transactional
+    public MaterialFilesRes addMaterialFiles(Long userId, Long materialId, List<MultipartFile> files) {
+        CreativeMaterial material = materialRepository.findByIdForUpdate(materialId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
+        projectService.verifyOwner(material.getProject(), userId);
+        if (files.isEmpty()) {
+            throw new BaseException(ErrorResponseCode.INVALID_MATERIAL_IMAGE);
+        }
 
         for (MultipartFile file : files) {
             String originalFileName = file.getOriginalFilename();
@@ -74,11 +84,8 @@ public class CreativeMaterialService {
             material.addFile(originalFileName, image.fileName(), image.contentType());
         }
 
-        CreativeMaterial savedMaterial = materialRepository.save(material);
-        List<MaterialCreateRes.FileItem> savedFiles = savedMaterial.getFiles().stream()
-                .map(file -> new MaterialCreateRes.FileItem(file.getFileId(), file.getOriginalFileName()))
-                .toList();
-        return new MaterialCreateRes(savedMaterial.getMaterialId(), projectId, savedMaterial.getTitle(), savedFiles);
+        materialRepository.flush();
+        return new MaterialFilesRes(materialId, getMaterialFiles(material));
     }
 
     @Transactional(readOnly = true)
