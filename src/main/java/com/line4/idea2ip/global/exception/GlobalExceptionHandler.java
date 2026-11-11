@@ -1,6 +1,9 @@
 package com.line4.idea2ip.global.exception;
 
 import com.line4.idea2ip.global.response.ErrorResponse;
+import com.line4.idea2ip.global.job.WorkflowException;
+
+import java.util.Map;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -95,6 +99,19 @@ public class GlobalExceptionHandler {
     }
 
     // 비즈니스 로직 에러
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse<?>> handleMethodValidation(HandlerMethodValidationException exception) {
+        var response = ErrorResponse.from(ErrorResponseCode.INVALID_HTTP_MESSAGE_PARAMETER);
+        return ResponseEntity.status(response.getHttpStatus()).body(response);
+    }
+
+    @ExceptionHandler(WorkflowException.class)
+    public ResponseEntity<ErrorResponse<?>> handleWorkflowException(WorkflowException exception) {
+        var error = exception.getActiveVersionId() == null ? ErrorResponse.from(exception)
+                : ErrorResponse.of(exception, Map.of("activeVersionId", exception.getActiveVersionId()));
+        return ResponseEntity.status(exception.getHttpStatus()).body(error);
+    }
+
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ErrorResponse<?>> handleBaseException(BaseException e){
         log.error("BaseException : {}", e.getMessage(), e);
