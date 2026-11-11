@@ -72,6 +72,9 @@ public class LocalImageStorage {
     }
 
     public void deleteAfterCommit(String filename) {
+        if (!filenamePattern.matcher(filename).matches()) {
+            return;
+        }
         Path target = directory.resolve(filename);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override

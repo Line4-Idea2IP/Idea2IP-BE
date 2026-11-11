@@ -49,7 +49,7 @@ public class CreativeMaterial extends BaseEntity {
 
     private LocalDate productionDate;
 
-    @OneToMany(mappedBy = "material", cascade = CascadeType.PERSIST)
+    @OneToMany(mappedBy = "material", cascade = CascadeType.PERSIST, orphanRemoval = true)
     private List<CreativeMaterialFile> files = new ArrayList<>();
 
     public CreativeMaterial(Project project, int materialOrder, MaterialType materialType,
@@ -65,5 +65,18 @@ public class CreativeMaterial extends BaseEntity {
 
     public void addFile(String originalFileName, String storageKey, String fileType) {
         files.add(new CreativeMaterialFile(this, originalFileName, storageKey, fileType));
+    }
+
+    public void removeFiles(List<CreativeMaterialFile> filesToRemove) {
+        files.removeAll(filesToRemove);
+    }
+
+    public void updateInfo(MaterialType materialType, String title, String description,
+                           String usedAi, LocalDate productionDate) {
+        this.materialType = materialType;
+        this.title = title;
+        this.description = description;
+        this.usedAi = usedAi;
+        this.productionDate = productionDate;
     }
 }
