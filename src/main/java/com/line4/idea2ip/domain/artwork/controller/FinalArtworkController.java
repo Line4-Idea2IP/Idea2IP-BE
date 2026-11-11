@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.artwork.controller;
 
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateReq;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateRes;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkDetailRes;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkImageRes;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkImageService;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkService;
@@ -9,10 +10,12 @@ import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.response.SuccessResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +43,15 @@ public class FinalArtworkController {
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
     }
 
+    @GetMapping("/{projectId}/artwork")
+    public ResponseEntity<SuccessResponse<ArtworkDetailRes>> getArtwork(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        ArtworkDetailRes response = artworkService.getArtwork(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
     @PatchMapping(value = "/{projectId}/artwork/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<SuccessResponse<ArtworkImageRes>> updateImage(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -48,5 +60,17 @@ public class FinalArtworkController {
     ) {
         ArtworkImageRes response = artworkImageService.updateImage(userDetails.getUserId(), projectId, file);
         return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @GetMapping("/{projectId}/artwork/image")
+    public ResponseEntity<byte[]> getImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        FinalArtworkImageService.ArtworkImage image = artworkImageService.getImage(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(image.contentType())
+                .body(image.content());
     }
 }
