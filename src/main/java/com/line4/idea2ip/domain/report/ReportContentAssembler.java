@@ -37,7 +37,7 @@ class ReportContentAssembler {
             }
         }
         if (human.isEmpty()) human.add(input.noContributionReason() == null
-                ? "확정된 직접 창작·수정 내용이 없습니다." : input.noContributionReason());
+                ? "확정된 직접 창작·수정 내용이 없습니다." : "사용자 확정: 창작 기여 없음 — " + input.noContributionReason());
         byKey.put(SectionKey.HUMAN_CONTRIBUTION.name(), section(SectionKey.HUMAN_CONTRIBUTION, human,
                 List.copyOf(humanSourceIds)));
 
@@ -82,7 +82,8 @@ class ReportContentAssembler {
                         .filter(flag -> flag.sectionKey().equals(previous.sectionKey())).findFirst().orElse(null);
                 var retained = carriedFlag == null ? List.<String>of() : carriedFlag.retainedUserParagraphs();
                 if (previous.sectionKey().equals(SectionKey.HUMAN_CONTRIBUTION.name())
-                        && !baseInput.contributions().equals(input.contributions())) {
+                        && (!baseInput.contributions().equals(input.contributions())
+                        || !Objects.equals(baseInput.noContributionReason(), input.noContributionReason()))) {
                     retained = retained.isEmpty() ? previous.paragraphs() : retained;
                 }
                 if (carriedFlag != null || evidenceChanged(previous, generated, base, baseInput, input, sources)) {
@@ -111,8 +112,8 @@ class ReportContentAssembler {
         editedKeys.addAll(edits.stream().map(edit -> edit.sectionKey().name()).toList());
         var sections = base.sections().stream().map(section -> {
             var edit = byKey.get(section.sectionKey());
-            return edit == null ? section : new Section(section.sectionKey(), section.title(),
-                    edit.paragraphs(), section.sourceIds());
+            return new Section(section.sectionKey(), SectionKey.valueOf(section.sectionKey()).title(),
+                    edit == null ? section.paragraphs() : edit.paragraphs(), section.sourceIds());
         }).toList();
         return new Content(base.schemaVersion(), base.mode(), sections, base.sources(), List.copyOf(editedKeys),
                 base.reviewFlags().stream().filter(flag -> !byKey.containsKey(flag.sectionKey())).toList());
@@ -122,7 +123,8 @@ class ReportContentAssembler {
                                     InputSnapshot input, Map<String, Evidence> current) {
         if (generated == null || !Set.copyOf(previous.sourceIds()).equals(Set.copyOf(generated.sourceIds()))) return true;
         if (previous.sectionKey().equals(SectionKey.HUMAN_CONTRIBUTION.name())
-                && !baseInput.contributions().equals(input.contributions())) return true;
+                && (!baseInput.contributions().equals(input.contributions())
+                        || !Objects.equals(baseInput.noContributionReason(), input.noContributionReason()))) return true;
         var oldSources = base.sources().stream().filter(source -> previous.sourceIds().contains(source.sourceId())).toList();
         if (oldSources.stream().anyMatch(source -> !source.equals(current.get(source.sourceId())))) return true;
         var priorInput = baseInput.aiInput().sources().stream()

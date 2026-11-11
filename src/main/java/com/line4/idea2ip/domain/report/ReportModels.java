@@ -23,7 +23,7 @@ public final class ReportModels {
     public enum SectionKey {
         WORK_OVERVIEW("작품 개요"),
         AI_USAGE("AI 활용"),
-        HUMAN_CONTRIBUTION("인간 기여"),
+        HUMAN_CONTRIBUTION("사용자가 확인한 창작 기여"),
         EVIDENCE_SUMMARY("근거 목록"),
         GAPS_AND_GUIDANCE("보완 사항·공식 지침");
 

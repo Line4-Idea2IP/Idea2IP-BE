@@ -11,6 +11,11 @@ import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
 
 import java.time.Duration;
+import java.time.LocalDate;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -74,7 +79,7 @@ class FastApiBriefAiClient implements BriefAiClient {
                     throw invalid();
                 }
                 evidence = Evidence.from(original, null);
-            } else if ("OFFICIAL_GUIDE".equals(required(node, "kind")) && node.path("reviewed").asBoolean(false)) {
+            } else if ("OFFICIAL_GUIDE".equals(required(node, "kind")) && validOfficial(node)) {
                 evidence = new Evidence(id, "OFFICIAL_GUIDE", required(node, "title"), required(node, "content"),
                         null, required(node, "official_url"), required(node, "edition"), required(node, "effective_from"),
                         optional(node, "effective_to"), required(node, "publisher"), optional(node, "published_on"),
@@ -102,6 +107,26 @@ class FastApiBriefAiClient implements BriefAiClient {
             sections.add(new Section(key.toUpperCase(java.util.Locale.ROOT), required(item, "title"), paragraphs, ids));
         }
         return new Draft("1.0", "live", List.copyOf(sections), List.copyOf(accepted.values()));
+    }
+
+    private boolean validOfficial(JsonNode node) {
+        try {
+            if (!node.path("reviewed").asBoolean(false) || !"KR".equals(required(node, "jurisdiction"))) return false;
+            URI uri = URI.create(required(node, "official_url"));
+            if (!"https".equals(uri.getScheme()) || uri.getUserInfo() != null
+                    || !Set.of("law.go.kr", "www.law.go.kr", "copyright.or.kr", "www.copyright.or.kr").contains(uri.getHost())) return false;
+            LocalDate today = LocalDate.now();
+            for (String field : List.of("published_on", "retrieved_on", "effective_from")) {
+                if (LocalDate.parse(required(node, field)).isAfter(today)) return false;
+            }
+            String until = optional(node, "effective_to");
+            if (until != null && LocalDate.parse(until).isBefore(today)) return false;
+            String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(required(node, "content").getBytes(StandardCharsets.UTF_8)));
+            return hash.equals(required(node, "sha256"));
+        } catch (Exception invalidMetadata) {
+            return false;
+        }
     }
 
     private JsonNode post(Input input, String operation) {
