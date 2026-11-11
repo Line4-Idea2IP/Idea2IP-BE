@@ -29,6 +29,12 @@ public enum ErrorResponseCode implements BaseResponseCode {
     INVALID_ARTWORK_IMAGE("ARTWORK_400", BAD_REQUEST, "최종 작품 이미지는 PNG 또는 JPG 이미지여야 합니다."),
     ARTWORK_NOT_FOUND("ARTWORK_404", NOT_FOUND, "최종 작품을 찾을 수 없습니다."),
     ARTWORK_IMAGE_NOT_FOUND("ARTWORK_404_2", NOT_FOUND, "최종 작품 이미지를 찾을 수 없습니다."),
+    INTERVIEW_QUESTION_NOT_FOUND("INTERVIEW_404", NOT_FOUND, "이 인터뷰에 해당하는 질문을 찾을 수 없습니다."),
+    INTERVIEW_MATERIALS_REQUIRED("INTERVIEW_409_1", CONFLICT, "인터뷰에 필요한 자료를 등록해 주세요."),
+    INTERVIEW_NOT_STARTED("INTERVIEW_409_2", CONFLICT, "인터뷰를 먼저 시작해 주세요."),
+    INTERVIEW_QUESTION_CONFLICT("INTERVIEW_409_3", CONFLICT, "현재 답변할 수 있는 질문이 아닙니다."),
+    INTERVIEW_REQUEST_CONFLICT("INTERVIEW_409_4", CONFLICT, "같은 요청 식별자로 다른 답변을 보낼 수 없습니다."),
+    INTERVIEW_AI_UNAVAILABLE("INTERVIEW_503", 503, "인터뷰 후속 처리를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."),
     SERVER_ERROR("GLOBAL_500", INTERNAL_SERVER_ERROR, "서버 내부에서 알 수 없는 에러가 발생했습니다.");
 
     private final String code;
