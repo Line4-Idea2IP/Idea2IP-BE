@@ -1,5 +1,10 @@
 package com.line4.idea2ip.domain.project.service;
 
+import com.line4.idea2ip.domain.interview.entity.AiInterview;
+import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
+import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository.ProjectInterviewStatus;
+import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
+import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository.ProjectMaterialCount;
 import com.line4.idea2ip.domain.project.dto.ProjectCreateReq;
 import com.line4.idea2ip.domain.project.dto.ProjectCreateRes;
 import com.line4.idea2ip.domain.project.dto.ProjectDetailRes;
@@ -22,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +38,8 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final ProjectThumbnailStorage thumbnailStorage;
     private final ProjectReportReadService reportRead;
+    private final CreativeMaterialRepository materials;
+    private final AiInterviewRepository interviews;
 
     @Transactional
     public ProjectCreateRes createProject(Long userId, ProjectCreateReq req) {
@@ -57,6 +66,7 @@ public class ProjectService {
 
         List<Project> recentProjects = projectRepository.findAllByUser_UserIdOrderByUpdateAtDescProjectIdDesc(userId);
         var statuses = reportRead.statuses(recentProjects);
+        var progress = getProgress(recentProjects.stream().map(Project::getProjectId).toList());
         List<ProjectListRes.ProjectItem> projects = recentProjects.stream().map(project -> {
             var status = statuses.getOrDefault(project.getProjectId(), ProjectReportStatus.empty());
             return ProjectListRes.ProjectItem.builder()
@@ -66,6 +76,8 @@ public class ProjectService {
                         .updatedAt(project.getUpdateAt())
                         .artworkType(project.getArtworkType())
                         .thumbnailUrl(project.getThumbnailUrl())
+                        .materialCount(progress.materialCount(project.getProjectId()))
+                        .interviewStatus(progress.interviewStatus(project.getProjectId()))
                         .reportStatus(status.reportStatus())
                         .latestReadyVersionId(status.latestReadyVersionId())
                         .reportUpdateAvailable(status.reportUpdateAvailable())
@@ -84,7 +96,10 @@ public class ProjectService {
         Project project = getOwnedProject(userId, projectId);
 
         var status = reportRead.statuses(List.of(project)).getOrDefault(projectId, ProjectReportStatus.empty());
+        var progress = getProgress(List.of(projectId));
         return ProjectDetailRes.builder()
+                .materialCount(progress.materialCount(projectId))
+                .interviewStatus(progress.interviewStatus(projectId))
                 .reportStatus(status.reportStatus())
                 .latestReadyVersionId(status.latestReadyVersionId())
                 .reportUpdateAvailable(status.reportUpdateAvailable())
@@ -126,6 +141,27 @@ public class ProjectService {
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.PROJECT_NOT_FOUND));
         verifyOwner(project, userId);
         return project;
+    }
+
+    private ProjectProgress getProgress(List<Long> projectIds) {
+        if (projectIds.isEmpty()) {
+            return new ProjectProgress(Map.of(), Map.of());
+        }
+        var materialCounts = materials.countByProjects(projectIds).stream().collect(
+                Collectors.toMap(ProjectMaterialCount::getProjectId, ProjectMaterialCount::getMaterialCount));
+        var interviewStatuses = interviews.findProjectStatuses(projectIds).stream().collect(
+                Collectors.toMap(ProjectInterviewStatus::getProjectId, ProjectInterviewStatus::getStatus));
+        return new ProjectProgress(materialCounts, interviewStatuses);
+    }
+
+    private record ProjectProgress(Map<Long, Long> materialCounts, Map<Long, AiInterview.Status> interviewStatuses) {
+        long materialCount(Long projectId) {
+            return materialCounts.getOrDefault(projectId, 0L);
+        }
+
+        AiInterview.Status interviewStatus(Long projectId) {
+            return interviewStatuses.getOrDefault(projectId, AiInterview.Status.NOT_STARTED);
+        }
     }
 
     private void verifyUser(Long userId) {

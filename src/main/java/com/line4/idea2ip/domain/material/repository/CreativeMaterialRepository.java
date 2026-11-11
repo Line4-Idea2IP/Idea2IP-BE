@@ -37,4 +37,16 @@ public interface CreativeMaterialRepository extends JpaRepository<CreativeMateri
     @Modifying
     @Query("update CreativeMaterial m set m.materialOrder = m.materialOrder - 1 where m.materialId = :materialId")
     void decreaseOrder(@Param("materialId") Long materialId);
+
+    @Query("""
+            select m.project.projectId as projectId, count(m) as materialCount
+            from CreativeMaterial m where m.project.projectId in :projectIds
+            group by m.project.projectId
+            """)
+    List<ProjectMaterialCount> countByProjects(@Param("projectIds") List<Long> projectIds);
+
+    interface ProjectMaterialCount {
+        Long getProjectId();
+        long getMaterialCount();
+    }
 }
