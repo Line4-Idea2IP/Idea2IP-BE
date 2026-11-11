@@ -10,6 +10,7 @@ import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.response.SuccessResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -59,5 +60,17 @@ public class FinalArtworkController {
     ) {
         ArtworkImageRes response = artworkImageService.updateImage(userDetails.getUserId(), projectId, file);
         return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @GetMapping("/{projectId}/artwork/image")
+    public ResponseEntity<byte[]> getImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        FinalArtworkImageService.ArtworkImage image = artworkImageService.getImage(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(image.contentType())
+                .body(image.content());
     }
 }
