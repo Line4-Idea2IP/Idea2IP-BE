@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.artwork.service;
 
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateReq;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateRes;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkDetailRes;
 import com.line4.idea2ip.domain.artwork.entity.FinalArtwork;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
@@ -30,5 +31,22 @@ public class FinalArtworkService {
         FinalArtwork artwork = new FinalArtwork(project, req.title(), req.description());
         FinalArtwork savedArtwork = artworkRepository.save(artwork);
         return new ArtworkCreateRes(savedArtwork.getArtworkId(), projectId, savedArtwork.getTitle());
+    }
+
+    @Transactional(readOnly = true)
+    public ArtworkDetailRes getArtwork(Long userId, Long projectId) {
+        projectService.getOwnedProject(userId, projectId);
+        FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
+        String fileUrl = artwork.getImagePath() == null
+                ? null : "/api/projects/" + projectId + "/artwork/image";
+        return new ArtworkDetailRes(
+                artwork.getArtworkId(),
+                projectId,
+                artwork.getTitle(),
+                artwork.getDescription(),
+                artwork.getOriginalFileName(),
+                fileUrl
+        );
     }
 }
