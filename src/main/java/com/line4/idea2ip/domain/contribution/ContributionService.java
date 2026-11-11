@@ -3,6 +3,7 @@ package com.line4.idea2ip.domain.contribution;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.contribution.ContributionModels.*;
 import com.line4.idea2ip.domain.interview.entity.AiInterview;
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
@@ -202,14 +203,14 @@ public class ContributionService {
         return generations.findById(id).orElseThrow();
     }
 
-    private Map<Key, Proposal> proposals(Input input, List<Candidate> candidates) {
+    static Map<Key, Proposal> proposals(Input input, List<Candidate> candidates) {
         Map<String, Source> sources = new HashMap<>();
         input.sources().forEach(source -> sources.put(source.sourceId(), source));
         Map<Key, Proposal> results = new LinkedHashMap<>();
         List<Candidate> grounded = new ArrayList<>(candidates);
         for (var source : input.sources()) {
             if (source.messageId() != null && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)")
-                    && !Set.of("없음", "없어요", "없습니다", "해당 없음").contains(source.content().replaceFirst("[.]$", "").strip())) {
+                    && !InterviewFieldState.isNotApplicableAnswer(source.content())) {
                 grounded.add(new Candidate("human_created", source.content(), List.of(source.sourceId())));
             }
         }
@@ -219,9 +220,11 @@ public class ContributionService {
                 if (source == null || source.messageId() == null || !source.content().contains(candidate.statement())) {
                     throw new Failure("AI_RESULT_INVALID", true);
                 }
-                boolean directEdit = candidate.category().equals("human_edit") && "human_edit".equals(source.targetField());
-                boolean directCreation = source.locator().endsWith("(HUMAN_CREATED_ELEMENT)")
-                        && !Set.of("없음", "없어요", "없습니다", "해당 없음").contains(source.content().replaceFirst("[.]$", "").strip());
+                // The AI reports "no such work" answers as statements; they are not contributions.
+                boolean declined = InterviewFieldState.isNotApplicableAnswer(source.content());
+                boolean directEdit = !declined && candidate.category().equals("human_edit")
+                        && "human_edit".equals(source.targetField());
+                boolean directCreation = !declined && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)");
                 if (!directEdit && !directCreation) continue;
                 var proposal = proposal(results, sources, source);
                 var statements = directEdit ? proposal.edits : proposal.elements;
@@ -240,7 +243,7 @@ public class ContributionService {
         return results;
     }
 
-    private Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source) {
+    private static Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source) {
         var material = source.materialId() == null ? null : sources.get("material:" + source.materialId());
         var key = material == null ? new Key(Kind.INTERVIEW_STATEMENT, source.messageId())
                 : new Key(Kind.MATERIAL, source.materialId());

@@ -17,11 +17,13 @@ public class MaterialUpdateReq {
 
     @JsonSetter(nulls = Nulls.FAIL)
     @Pattern(regexp = "(?sU).*\\S.*", message = "자료 제목을 입력해주세요.")
+    @Size(max = MaterialCreateReq.TITLE_MAX, message = "자료 제목은 200자 이하여야 합니다.")
     private String title;
 
     @JsonSetter(nulls = Nulls.FAIL)
     private MaterialType materialType;
 
+    @Size(max = MaterialCreateReq.DESCRIPTION_MAX, message = "자료 설명은 5000자 이하여야 합니다.")
     private String description;
 
     @Size(max = 255, message = "AI 도구 이름은 255자 이하여야 합니다.")

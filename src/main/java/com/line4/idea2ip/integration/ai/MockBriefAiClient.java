@@ -1,5 +1,6 @@
 package com.line4.idea2ip.integration.ai;
 
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -12,8 +13,7 @@ class MockBriefAiClient implements BriefAiClient {
     public CandidateResult contributions(Input input) {
         var candidates = input.sources().stream().filter(source -> source.messageId() != null)
                 .filter(source -> "human_edit".equals(source.targetField()) || source.targetField() == null)
-                .filter(source -> !java.util.Set.of("없음", "없어요", "없습니다", "해당 없음")
-                        .contains(source.content().replaceFirst("[.]$", "").strip()))
+                .filter(source -> !InterviewFieldState.isNotApplicableAnswer(source.content()))
                 .map(source -> new Candidate(source.targetField() == null ? "human_created" : "human_edit",
                         source.content(), List.of(source.sourceId())))
                 .toList();
