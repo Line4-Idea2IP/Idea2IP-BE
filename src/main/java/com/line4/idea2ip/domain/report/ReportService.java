@@ -69,7 +69,7 @@ public class ReportService {
             var existing = versions.findByReport_IdAndRequestId(report.getId(), req.requestId()).orElse(null);
             if (existing != null) {
                 if (!existing.matches(req)) throw conflict("REQUEST_ID_CONFLICT", "같은 요청 식별자에 다른 입력을 보낼 수 없습니다.");
-                if (req.retry() && existing.getJob().failure() != null && existing.getJob().failure().retryable()) {
+                if (req.retryRequested() && existing.getJob().failure() != null && existing.getJob().failure().retryable()) {
                     ensureIdle(report);
                     validateBase(report, req);
                     existing.getJob().retry();
@@ -78,7 +78,7 @@ public class ReportService {
             }
             ensureIdle(report);
         }
-        if (req.retry()) throw conflict("RETRY_REQUEST_NOT_FOUND", "재시도할 리포트 요청이 없습니다.");
+        if (req.retryRequested()) throw conflict("RETRY_REQUEST_NOT_FOUND", "재시도할 리포트 요청이 없습니다.");
 
         validateRequest(req);
         ReportVersion base = report == null ? null : report.getLatestReadyVersion();

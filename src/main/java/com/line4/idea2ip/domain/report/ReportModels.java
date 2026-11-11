@@ -41,7 +41,9 @@ public final class ReportModels {
     public record SectionEdit(@NotNull SectionKey sectionKey,
                               @NotEmpty @Size(max = 100) List<@NotBlank @Size(max = 8000) String> paragraphs) {}
     public record VersionReq(@NotNull UUID requestId, @NotNull Operation operation, @Positive Long baseVersionId,
-                             @Size(max = 3) List<@NotNull @Valid SectionEdit> editedSections, boolean retry) {
+                             @Size(max = 3) List<@NotNull @Valid SectionEdit> editedSections, Boolean retry) {
+        public boolean retryRequested() { return Boolean.TRUE.equals(retry); }
+
         public List<SectionEdit> edits() { return editedSections == null ? List.of() : editedSections; }
     }
 

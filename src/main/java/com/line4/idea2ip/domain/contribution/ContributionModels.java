@@ -45,11 +45,15 @@ public final class ContributionModels {
         }
     }
 
-    public record GenerateReq(@NotNull UUID requestId, @NotNull @PositiveOrZero Long expectedRevision, boolean retry) {}
+    public record GenerateReq(@NotNull UUID requestId, @NotNull @PositiveOrZero Long expectedRevision, Boolean retry) {
+        public boolean retryRequested() { return Boolean.TRUE.equals(retry); }
+    }
     public record Change(@NotNull Long stepId, @NotNull Decision decision, @Valid Content edits) {}
     public record PatchReq(@NotNull @PositiveOrZero Long expectedRevision,
                            @NotNull @Size(max = 500) List<@NotNull @Valid Change> changes,
-                           @JsonProperty("finalize") boolean finalizeReview, @Size(max = 2000) String noContributionReason) {}
+                           @JsonProperty("finalize") Boolean finalizeReview, @Size(max = 2000) String noContributionReason) {
+        public boolean finalizeRequested() { return Boolean.TRUE.equals(finalizeReview); }
+    }
 
     public record GenerationView(Long generationId, UUID requestId, PersistentJob.Status status, PersistentJob.Failure failure) {}
     public record Summary(Long stepId, int order, Kind kind, String title, StepStatus reviewStatus) {}

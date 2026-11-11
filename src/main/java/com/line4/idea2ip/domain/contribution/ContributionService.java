@@ -65,14 +65,14 @@ public class ContributionService {
             if (existing.getExpectedRevision() != req.expectedRevision()) {
                 throw conflict("REQUEST_ID_CONFLICT", "같은 요청 식별자에 다른 입력을 보낼 수 없습니다.");
             }
-            if (req.retry() && existing.getJob().failure() != null && existing.getJob().failure().retryable()) {
+            if (req.retryRequested() && existing.getJob().failure() != null && existing.getJob().failure().retryable()) {
                 ensureIdle(review);
                 existing.getJob().retry();
             }
             return toView(existing);
         }
 
-        if (req.retry()) {
+        if (req.retryRequested()) {
             throw conflict("RETRY_REQUEST_NOT_FOUND", "재시도할 생성 요청을 찾을 수 없습니다.");
         }
         checkRevision(review, req.expectedRevision());
@@ -103,7 +103,7 @@ public class ContributionService {
             changed |= step.apply(change.decision(), change.edits());
         }
         String reason = StringUtils.hasText(req.noContributionReason()) ? req.noContributionReason().strip() : null;
-        if (req.finalizeReview()) {
+        if (req.finalizeRequested()) {
             if (stored.stream().anyMatch(ContributionStep::needsReview)) {
                 throw new WorkflowException("CONTRIBUTION_DECISION_REQUIRED", 400, "검토 대상의 확정 또는 제외를 선택해 주세요.");
             }
@@ -114,7 +114,7 @@ public class ContributionService {
                     || !Objects.equals(review.getNoContributionReason(), reason);
         }
         if (changed) {
-            review.review(req.finalizeReview(), req.finalizeReview() ? reason : null);
+            review.review(req.finalizeRequested(), req.finalizeRequested() ? reason : null);
             changes.record(project, Type.CONTRIBUTION, Operation.UPDATED, review.getId());
         }
         return view(projectId, review);
