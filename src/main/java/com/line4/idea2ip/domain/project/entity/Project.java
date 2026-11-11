@@ -61,6 +61,10 @@ public class Project extends BaseEntity {
         this.inputRevision = 0L;
     }
 
+    public long advanceInputRevision() {
+        return ++inputRevision;
+    }
+
     public void updateThumbnail(String thumbnailUrl) {
         this.thumbnailUrl = thumbnailUrl;
     }

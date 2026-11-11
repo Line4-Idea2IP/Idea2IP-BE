@@ -10,6 +10,10 @@ import com.line4.idea2ip.domain.material.entity.MaterialType;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.service.ProjectService;
+import com.line4.idea2ip.domain.project.service.ProjectInputChanges;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Operation;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Type;
+import java.util.Objects;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,7 @@ import java.util.List;
 public class CreativeMaterialService {
 
     private final ProjectService projectService;
+    private final ProjectInputChanges inputChanges;
     private final CreativeMaterialRepository materialRepository;
     private final CreativeMaterialFileService materialFileService;
 
@@ -44,6 +49,7 @@ public class CreativeMaterialService {
                 req.title(), req.description(), usedAi, req.productionDate());
 
         CreativeMaterial savedMaterial = materialRepository.save(material);
+        inputChanges.record(project, Type.MATERIAL, Operation.ADDED, savedMaterial.getMaterialId());
         return new MaterialCreateRes(savedMaterial.getMaterialId(), projectId, savedMaterial.getTitle(), List.of());
     }
 
@@ -74,6 +80,7 @@ public class CreativeMaterialService {
 
     @Transactional
     public MaterialDetailRes updateMaterial(Long userId, Long materialId, MaterialUpdateReq req) {
+        var project = lockProjectForMaterial(userId, materialId);
         CreativeMaterial material = getOwnedMaterialForUpdate(userId, materialId);
         MaterialType materialType = req.getMaterialType() != null ? req.getMaterialType() : material.getMaterialType();
         String title = req.getTitle() != null ? req.getTitle() : material.getTitle();
@@ -88,7 +95,12 @@ public class CreativeMaterialService {
             usedAi = null;
         }
 
-        material.updateInfo(materialType, title, description, usedAi, productionDate);
+        if (materialType != material.getMaterialType() || !Objects.equals(title, material.getTitle())
+                || !Objects.equals(description, material.getDescription()) || !Objects.equals(usedAi, material.getUsedAi())
+                || !Objects.equals(productionDate, material.getProductionDate())) {
+            material.updateInfo(materialType, title, description, usedAi, productionDate);
+            inputChanges.record(project, Type.MATERIAL, Operation.UPDATED, materialId);
+        }
         return toMaterialDetail(material);
     }
 
@@ -99,12 +111,13 @@ public class CreativeMaterialService {
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
 
         // Match registration's project-first locking order so creation and deletion share one timeline lock.
-        projectService.getOwnedProjectForUpdate(userId, projectId);
+        Project project = projectService.getOwnedProjectForUpdate(userId, projectId);
         CreativeMaterial material = getOwnedMaterialForUpdate(userId, materialId);
         int deletedOrder = material.getMaterialOrder();
         materialFileService.deleteFilesAfterCommit(material.getFiles());
 
         materialRepository.delete(material);
+        inputChanges.record(project, Type.MATERIAL, Operation.DELETED, materialId);
         materialRepository.flush();
         // Move each row into the free position before shifting the next row.
         for (Long nextMaterialId : materialRepository.findIdsAfterOrder(projectId, deletedOrder)) {
@@ -117,6 +130,12 @@ public class CreativeMaterialService {
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
         projectService.verifyOwner(material.getProject(), userId);
         return material;
+    }
+
+    private Project lockProjectForMaterial(Long userId, Long materialId) {
+        Long projectId = materialRepository.findProjectIdByMaterialId(materialId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
+        return projectService.getOwnedProjectForUpdate(userId, projectId);
     }
 
     private CreativeMaterial getOwnedMaterialForUpdate(Long userId, Long materialId) {

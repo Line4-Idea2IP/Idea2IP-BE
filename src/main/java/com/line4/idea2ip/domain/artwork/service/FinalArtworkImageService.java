@@ -4,6 +4,9 @@ import com.line4.idea2ip.domain.artwork.dto.ArtworkImageRes;
 import com.line4.idea2ip.domain.artwork.entity.FinalArtwork;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.project.service.ProjectService;
+import com.line4.idea2ip.domain.project.service.ProjectInputChanges;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Operation;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Type;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import com.line4.idea2ip.global.storage.LocalImageStorage;
@@ -23,19 +26,22 @@ import java.nio.file.NoSuchFileException;
 public class FinalArtworkImageService {
 
     private final ProjectService projectService;
+    private final ProjectInputChanges inputChanges;
     private final FinalArtworkRepository artworkRepository;
     private final LocalImageStorage imageStorage;
 
     public FinalArtworkImageService(ProjectService projectService, FinalArtworkRepository artworkRepository,
+                                    ProjectInputChanges inputChanges,
                                     @Value("${idea2ip.artwork-image-dir}") String directory) {
         this.projectService = projectService;
+        this.inputChanges = inputChanges;
         this.artworkRepository = artworkRepository;
         this.imageStorage = new LocalImageStorage(directory, "artwork-", ErrorResponseCode.INVALID_ARTWORK_IMAGE);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ArtworkImageRes updateImage(Long userId, Long projectId, MultipartFile file) {
-        projectService.getOwnedProjectForUpdate(userId, projectId);
+        var project = projectService.getOwnedProjectForUpdate(userId, projectId);
         FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
 
@@ -51,6 +57,7 @@ public class FinalArtworkImageService {
         LocalImageStorage.StoredImage image = imageStorage.store(file);
         artwork.updateImage(image.fileName(), originalFileName);
         deleteImageAfterCommit(previousPath);
+        inputChanges.record(project, Type.FINAL_ARTWORK, Operation.UPDATED, artwork.getArtworkId());
         return new ArtworkImageRes(artwork.getArtworkId(), projectId, originalFileName);
     }
 

@@ -11,6 +11,9 @@ import com.line4.idea2ip.domain.interview.repository.InterviewMessageRepository;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterial;
 import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.service.ProjectService;
+import com.line4.idea2ip.domain.project.service.ProjectInputChanges;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Operation;
+import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Type;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.integration.ai.AiInterviewClient;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Answer;
@@ -41,6 +44,7 @@ import static com.line4.idea2ip.global.response.code.ErrorResponseCode.*;
 @Service
 public class InterviewService {
     private final ProjectService projects;
+    private final ProjectInputChanges inputChanges;
     private final AiInterviewRepository interviews;
     private final InterviewMessageRepository messages;
     private final InterviewReadinessService readiness;
@@ -49,8 +53,9 @@ public class InterviewService {
 
     public InterviewService(ProjectService projects, AiInterviewRepository interviews,
                             InterviewMessageRepository messages, InterviewReadinessService readiness,
-                            AiInterviewClient ai, PlatformTransactionManager transactionManager) {
+                            AiInterviewClient ai, ProjectInputChanges inputChanges, PlatformTransactionManager transactionManager) {
         this.projects = projects;
+        this.inputChanges = inputChanges;
         this.interviews = interviews;
         this.messages = messages;
         this.readiness = readiness;
@@ -124,7 +129,7 @@ public class InterviewService {
 
     public AnswerRes submitAnswer(Long userId, Long projectId, InterviewAnswerReq req) {
         Long answerId = transaction.execute(status -> {
-            projects.getOwnedProjectForUpdate(userId, projectId);
+            Project project = projects.getOwnedProjectForUpdate(userId, projectId);
             AiInterview interview = getStartedInterview(projectId);
             String requestId = req.requestId().toString();
             var previous = messages.findByInterview_InterviewIdAndRequestId(interview.getInterviewId(), requestId);
@@ -145,7 +150,9 @@ public class InterviewService {
             if (interview.getStatus() == COMPLETED || last == null || !last.getMessageId().equals(question.getMessageId())) {
                 throw new BaseException(INTERVIEW_QUESTION_CONFLICT);
             }
-            return messages.save(InterviewMessage.answer(question, requestId, req.content())).getMessageId();
+            Long savedId = messages.save(InterviewMessage.answer(question, requestId, req.content())).getMessageId();
+            inputChanges.record(project, Type.INTERVIEW_ANSWER, Operation.ADDED, savedId);
+            return savedId;
         });
         return new AnswerRes(answerId, advance(userId, projectId, answerId));
     }
