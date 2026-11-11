@@ -5,6 +5,7 @@ import com.line4.idea2ip.domain.interview.dto.InterviewResponses.BlockingReason;
 import com.line4.idea2ip.domain.interview.dto.InterviewResponses.MaterialCheck;
 import com.line4.idea2ip.domain.interview.dto.InterviewResponses.MaterialRef;
 import com.line4.idea2ip.domain.interview.dto.InterviewResponses.MaterialType;
+import com.line4.idea2ip.domain.interview.dto.InterviewResponses.MaterialWarning;
 import com.line4.idea2ip.domain.interview.dto.InterviewResponses.ReadinessRes;
 import com.line4.idea2ip.domain.interview.entity.InterviewField;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
@@ -45,17 +46,16 @@ class InterviewReadinessService {
                 new MaterialCheck(MaterialType.AI_MATERIAL, aiReady),
                 new MaterialCheck(MaterialType.MANUAL_EDIT_MATERIAL, manualReady)
         );
-        List<BlockingReason> reasons = new ArrayList<>();
-        if (!artworkReady) {
-            reasons.add(new BlockingReason(MaterialType.FINAL_ARTWORK, "최종 작품 이미지를 등록해 주세요."));
-        }
+        List<BlockingReason> reasons = artworkReady ? List.of()
+                : List.of(new BlockingReason(MaterialType.FINAL_ARTWORK, "최종 작품 이미지를 등록해 주세요."));
+        List<MaterialWarning> warnings = new ArrayList<>();
         if (!aiReady) {
-            reasons.add(new BlockingReason(MaterialType.AI_MATERIAL, "AI 활용 자료와 이미지를 등록해 주세요."));
+            warnings.add(new MaterialWarning(MaterialType.AI_MATERIAL, "AI 활용 자료와 이미지를 보완할 수 있습니다."));
         }
         if (!manualReady) {
-            reasons.add(new BlockingReason(MaterialType.MANUAL_EDIT_MATERIAL, "직접 수정 자료와 이미지를 등록해 주세요."));
+            warnings.add(new MaterialWarning(MaterialType.MANUAL_EDIT_MATERIAL, "직접 수정 자료와 이미지를 보완할 수 있습니다."));
         }
-        return new ReadinessRes(reasons.isEmpty(), states, checks, List.copyOf(reasons));
+        return new ReadinessRes(artworkReady, states, checks, reasons, List.copyOf(warnings));
     }
 
     List<InterviewFieldState> initialFields(List<CreativeMaterial> materials) {
