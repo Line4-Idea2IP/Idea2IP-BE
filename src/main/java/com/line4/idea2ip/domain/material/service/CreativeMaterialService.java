@@ -20,6 +20,7 @@ import com.line4.idea2ip.global.storage.LocalImageStorage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -149,6 +150,25 @@ public class CreativeMaterialService {
 
         material.updateInfo(materialType, title, description, usedAi, productionDate);
         return toMaterialDetail(material);
+    }
+
+    // Read attachments committed while waiting for the material lock rather than an earlier MySQL snapshot.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void deleteMaterial(Long userId, Long materialId) {
+        Long projectId = materialRepository.findProjectIdByMaterialId(materialId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
+
+        // Match registration's project-first locking order so creation and deletion share one timeline lock.
+        projectService.getOwnedProjectForUpdate(userId, projectId);
+        CreativeMaterial material = getOwnedMaterialForUpdate(userId, materialId);
+        int deletedOrder = material.getMaterialOrder();
+        for (CreativeMaterialFile file : material.getFiles()) {
+            imageStorage.deleteAfterCommit(file.getStorageKey());
+        }
+
+        materialRepository.delete(material);
+        materialRepository.flush();
+        materialRepository.decreaseOrdersAfter(projectId, deletedOrder);
     }
 
     @Transactional(readOnly = true)
