@@ -2,6 +2,7 @@ package com.line4.idea2ip.domain.artwork.controller;
 
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateReq;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateRes;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkDetailRes;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkImageRes;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkImageService;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkService;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +40,15 @@ public class FinalArtworkController {
     ) {
         ArtworkCreateRes response = artworkService.createArtwork(userDetails.getUserId(), projectId, req);
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
+    }
+
+    @GetMapping("/{projectId}/artwork")
+    public ResponseEntity<SuccessResponse<ArtworkDetailRes>> getArtwork(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId
+    ) {
+        ArtworkDetailRes response = artworkService.getArtwork(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok(SuccessResponse.from(response));
     }
 
     @PatchMapping(value = "/{projectId}/artwork/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
