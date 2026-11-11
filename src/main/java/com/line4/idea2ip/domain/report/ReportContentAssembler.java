@@ -24,17 +24,19 @@ class ReportContentAssembler {
             human.addAll(step.content().humanEdits().stream().map(text -> step.title() + " · 직접 수정: " + text).toList());
             var usage = step.content().aiUsage();
             if (usage != null) {
+                var aiTexts = new ArrayList<String>();
+                if (usage.tools() != null) aiTexts.addAll(usage.tools());
+                if (usage.purpose() != null) aiTexts.add(usage.purpose());
+                if (usage.outputUsage() != null) aiTexts.add(usage.outputUsage());
                 if (usage.tools() != null) confirmedAi.addAll(usage.tools().stream().map(tool -> "도구: " + tool).toList());
                 if (usage.purpose() != null) confirmedAi.add("목적: " + usage.purpose());
                 if (usage.outputUsage() != null) confirmedAi.add("산출물 활용: " + usage.outputUsage());
-                step.sources().forEach(source -> aiSourceIds.add(source.sourceId()));
+                aiSourceIds.addAll(relevantSourceIds(step.sources(), aiTexts));
             }
-            for (var evidence : step.sources()) {
-                sources.putIfAbsent(evidence.sourceId(), evidence);
-                if (!step.content().humanCreatedElements().isEmpty() || !step.content().humanEdits().isEmpty()) {
-                    humanSourceIds.add(evidence.sourceId());
-                }
-            }
+            var humanTexts = new ArrayList<>(step.content().humanCreatedElements());
+            humanTexts.addAll(step.content().humanEdits());
+            if (!humanTexts.isEmpty()) humanSourceIds.addAll(relevantSourceIds(step.sources(), humanTexts));
+            for (var evidence : step.sources()) sources.putIfAbsent(evidence.sourceId(), evidence);
         }
         if (human.isEmpty()) human.add(input.noContributionReason() == null
                 ? "확정된 직접 창작·수정 내용이 없습니다." : "사용자 확정: 창작 기여 없음 — " + input.noContributionReason());
@@ -130,6 +132,19 @@ class ReportContentAssembler {
         var priorInput = baseInput.aiInput().sources().stream()
                 .filter(source -> previous.sourceIds().contains(source.sourceId())).toList();
         return !input.aiInput().sources().containsAll(priorInput);
+    }
+
+    /**
+     * Interview answers whose quoted text appears in the section's confirmed statements, plus the step's
+     * unquoted anchors (material/artwork). Falls back to every step source when the user's edits removed
+     * all quoted text, so a section never loses its evidence.
+     */
+    private static List<String> relevantSourceIds(List<Evidence> stepSources, List<String> texts) {
+        var quoted = stepSources.stream().filter(source -> source.quote() != null
+                && texts.stream().anyMatch(text -> text.contains(source.quote()))).toList();
+        if (quoted.isEmpty()) return stepSources.stream().map(Evidence::sourceId).toList();
+        return stepSources.stream().filter(source -> source.quote() == null || quoted.contains(source))
+                .map(Evidence::sourceId).toList();
     }
 
     private Section section(SectionKey key, List<String> paragraphs, List<String> ids) {

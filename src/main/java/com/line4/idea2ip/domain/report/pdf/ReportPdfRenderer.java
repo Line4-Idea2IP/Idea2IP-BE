@@ -51,7 +51,8 @@ public class ReportPdfRenderer {
                         layout.paragraph("출처: " + section.sourceIds().stream().map(labels::get).collect(Collectors.joining(", ")), 9);
                     }
                 }
-                if (!sources.isEmpty()) layout.heading("출처 세부 정보");
+                // Keep the heading with several entries instead of leaving one orphaned at the page bottom.
+                if (!sources.isEmpty()) layout.heading("출처 세부 정보", Math.min(sources.size(), 3) * 45f);
                 for (Evidence source : ordered) {
                     layout.paragraph(labels.get(source.sourceId()) + " " + kindLabel(source.kind()) + " — " + displayTitle(source), 10);
                     if (source.locator() != null && !source.locator().strip().equals(source.title().strip())) {
@@ -104,7 +105,11 @@ public class ReportPdfRenderer {
         }
 
         private void heading(String heading) throws IOException {
-            if (stream == null || y < MARGIN + 55) newPage();
+            heading(heading, 0);
+        }
+
+        private void heading(String heading, float keepWithNext) throws IOException {
+            if (stream == null || y < MARGIN + 55 + keepWithNext) newPage();
             y -= 8;
             paragraph(heading, 15);
         }

@@ -24,6 +24,27 @@ class ReportContentAssemblerTests {
         assertTrue(result.sections().get(4).paragraphs().contains("검토된 공식 지침을 확인할 수 없습니다."));
     }
 
+    @Test void sectionsCiteOnlyAnswersBehindTheirStatements() {
+        var material = new Evidence("material:5", "ATTACHED_FILE", "구도 자료", null, null, null, null, null, null, null, null, null);
+        var tool = new Evidence("answer:1", "USER_STATEMENT", "답변 1", "Stable Diffusion", null, null, null, null, null, null, null, null);
+        var edit = new Evidence("answer:2", "USER_STATEMENT", "답변 2", "시계판을 파란색으로 칠했습니다.", null, null, null, null, null, null, null, null);
+        var content = new com.line4.idea2ip.domain.contribution.ContributionModels.Content(
+                new AiUsage(List.of("Stable Diffusion"), null, null), List.of(), List.of("시계판을 파란색으로 칠했습니다."));
+        var confirmed = new Confirmed("구도 자료", content, List.of(material, tool, edit));
+        var result = assembler.assemble(new InputSnapshot(ai, List.of(confirmed), null, List.of()), draft, null, null);
+        assertEquals(List.of("material:5", "answer:1"), result.sections().get(1).sourceIds());
+        assertEquals(List.of("material:5", "answer:2"), result.sections().get(2).sourceIds());
+    }
+
+    @Test void editedStatementsFallBackToAllStepSources() {
+        var material = new Evidence("material:5", "ATTACHED_FILE", "구도 자료", null, null, null, null, null, null, null, null, null);
+        var edit = new Evidence("answer:2", "USER_STATEMENT", "답변 2", "원래 답변", null, null, null, null, null, null, null, null);
+        var content = new com.line4.idea2ip.domain.contribution.ContributionModels.Content(null, List.of(), List.of("사용자가 고친 문장"));
+        var confirmed = new Confirmed("구도 자료", content, List.of(material, edit));
+        var result = assembler.assemble(new InputSnapshot(ai, List.of(confirmed), null, List.of()), draft, null, null);
+        assertEquals(List.of("material:5", "answer:2"), result.sections().get(2).sourceIds());
+    }
+
     @Test void noContributionReasonSupersedesPriorEditedContribution() {
         var before = new InputSnapshot(ai, List.of(), "기여 미확인", List.of());
         var base = assembler.assemble(before, draft, null, null);

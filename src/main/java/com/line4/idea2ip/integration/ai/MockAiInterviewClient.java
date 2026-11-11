@@ -6,32 +6,39 @@ import com.line4.idea2ip.domain.material.entity.MaterialType;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
 
 import static com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Status.*;
 
 @Component
 class MockAiInterviewClient implements AiInterviewClient {
-    private static final Set<String> NOT_APPLICABLE_ANSWERS = Set.of("해당 없음", "없음", "없어요", "없습니다");
-
-    @Override
-    public QuestionDraft generateQuestion(Context context, InterviewField field) {
-        String prompt = switch (field) {
+    /** Neutral default question for a field; also the example given to the live model. */
+    static String baseQuestion(InterviewField field) {
+        return switch (field) {
             case AI_TOOL -> "창작 과정에서 어떤 AI 도구를 사용했나요?";
             case AI_PURPOSE -> "그 AI 도구를 어떤 작업에, 어떤 목적으로 사용했나요?";
-            case AI_OUTPUT_USAGE -> "AI가 만든 결과 중 어떤 부분을 작품에 활용했나요?";
-            case HUMAN_CREATED_ELEMENT -> "직접 창작한 요소가 있다면 무엇을 어떻게 만들었나요?";
-            case HUMAN_EDITED_EXPRESSION -> "직접 수정하거나 추가한 표현이 있다면 어떻게 작업했나요?";
+            case AI_OUTPUT_USAGE -> "AI가 만든 결과를 최종 작품에 활용했나요? 활용했다면 어떤 부분을 어떻게 활용했는지 알려주세요.";
+            case HUMAN_CREATED_ELEMENT -> "직접 새로 만든 요소가 있다면 무엇이고, 어떤 방식으로 만들었나요? 없다면 없다고 알려주세요.";
+            case HUMAN_EDITED_EXPRESSION -> "직접 수정하거나 추가한 표현이 있다면 무엇을 어떻게 작업했나요? 없다면 없다고 알려주세요.";
         };
-        boolean followUp = context.answers().stream().anyMatch(answer -> answer.field() == field);
-        if (followUp) {
-            prompt = "앞선 답변을 조금 더 구체적으로 알려주세요. " + prompt;
-        }
-        MaterialType referenceType = switch (field) {
+    }
+
+    /** Material type that usually documents the work a field asks about. */
+    static MaterialType referenceType(InterviewField field) {
+        return switch (field) {
             case AI_TOOL, AI_PURPOSE, AI_OUTPUT_USAGE -> MaterialType.AI_ASSISTED;
             case HUMAN_CREATED_ELEMENT -> MaterialType.INITIAL_SKETCH;
             case HUMAN_EDITED_EXPRESSION -> MaterialType.MANUAL_EDIT;
         };
+    }
+
+    @Override
+    public QuestionDraft generateQuestion(Context context, InterviewField field) {
+        String prompt = baseQuestion(field);
+        boolean followUp = context.answers().stream().anyMatch(answer -> answer.field() == field);
+        if (followUp) {
+            prompt = "앞선 답변을 조금 더 구체적으로 알려주세요. " + prompt;
+        }
+        MaterialType referenceType = referenceType(field);
         List<String> sourceIds = context.evidence().stream()
                 .filter(source -> source.type() == referenceType)
                 .map(Evidence::sourceId)
@@ -44,8 +51,7 @@ class MockAiInterviewClient implements AiInterviewClient {
     @Override
     public InterviewFieldState analyzeAnswer(Context context, Answer answer) {
         String text = answer.content();
-        String phrase = text.endsWith(".") ? text.substring(0, text.length() - 1).stripTrailing() : text;
-        if (NOT_APPLICABLE_ANSWERS.contains(phrase)) {
+        if (InterviewFieldState.isNotApplicableAnswer(text)) {
             boolean allowed = answer.field() == InterviewField.HUMAN_CREATED_ELEMENT
                     || answer.field() == InterviewField.HUMAN_EDITED_EXPRESSION;
             return new InterviewFieldState(answer.field(), allowed ? NOT_APPLICABLE : NEEDS_REVIEW, text);
