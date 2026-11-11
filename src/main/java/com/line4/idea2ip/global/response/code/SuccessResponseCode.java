@@ -9,7 +9,8 @@ import static com.line4.idea2ip.global.constant.StaticValue.*;
 @AllArgsConstructor
 public enum SuccessResponseCode implements BaseResponseCode{
     SUCCESS_OK("GLOBAL_200",OK,"호출에 성공하였습니다."),
-    SUCCESS_CREATED("GLOBAL_201",CREATED,"생성에 성공하였습니다.");
+    SUCCESS_CREATED("GLOBAL_201",CREATED,"생성에 성공하였습니다."),
+    SUCCESS_ACCEPTED("GLOBAL_202",202,"작업 요청을 접수했습니다.");
 
     private final String code;
     private final int httpStatus;
