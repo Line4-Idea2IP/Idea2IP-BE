@@ -8,11 +8,15 @@ import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.global.response.code.ErrorResponseCode;
 import com.line4.idea2ip.global.storage.LocalImageStorage;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 
 @Service
 public class FinalArtworkImageService {
@@ -49,5 +53,29 @@ public class FinalArtworkImageService {
             imageStorage.deleteAfterCommit(previousPath);
         }
         return new ArtworkImageRes(artwork.getArtworkId(), projectId, originalFileName);
+    }
+
+    @Transactional(readOnly = true)
+    public ArtworkImage getImage(Long userId, Long projectId) {
+        projectService.getOwnedProject(userId, projectId);
+        FinalArtwork artwork = artworkRepository.findByProject_ProjectId(projectId)
+                .orElseThrow(() -> new BaseException(ErrorResponseCode.ARTWORK_NOT_FOUND));
+        String imagePath = artwork.getImagePath();
+        if (imagePath == null) {
+            throw new BaseException(ErrorResponseCode.ARTWORK_IMAGE_NOT_FOUND);
+        }
+
+        try {
+            byte[] content = imageStorage.read(imagePath);
+            MediaType contentType = imagePath.endsWith(".png") ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+            return new ArtworkImage(contentType, content);
+        } catch (NoSuchFileException e) {
+            throw new BaseException(ErrorResponseCode.ARTWORK_IMAGE_NOT_FOUND);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read artwork image " + artwork.getArtworkId(), e);
+        }
+    }
+
+    public record ArtworkImage(MediaType contentType, byte[] content) {
     }
 }
