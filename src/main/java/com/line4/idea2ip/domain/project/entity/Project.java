@@ -11,7 +11,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -36,8 +35,7 @@ public class Project extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Lob
-    @Column(name = "project_name", nullable = false, columnDefinition = "LONGTEXT")
+    @Column(name = "project_name", nullable = false, columnDefinition = "text")
     private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
