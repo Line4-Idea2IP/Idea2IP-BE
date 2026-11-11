@@ -39,9 +39,20 @@ public class FinalArtwork extends BaseEntity {
     @Column(columnDefinition = "LONGTEXT")
     private String description;
 
+    @Column(name = "image_path", length = 500)
+    private String imagePath;
+
+    @Column(name = "original_file_name", length = 255)
+    private String originalFileName;
+
     public FinalArtwork(Project project, String title, String description) {
         this.project = project;
         this.title = title;
         this.description = description;
+    }
+
+    public void updateImage(String imagePath, String originalFileName) {
+        this.imagePath = imagePath;
+        this.originalFileName = originalFileName;
     }
 }
