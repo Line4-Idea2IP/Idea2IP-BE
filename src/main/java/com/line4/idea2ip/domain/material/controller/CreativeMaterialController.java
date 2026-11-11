@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -72,6 +73,15 @@ public class CreativeMaterialController {
     ) {
         MaterialDetailRes response = materialService.updateMaterial(userDetails.getUserId(), materialId, req);
         return ResponseEntity.ok(SuccessResponse.from(response));
+    }
+
+    @DeleteMapping("/{materialId}")
+    public ResponseEntity<Void> deleteMaterial(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("materialId") Long materialId
+    ) {
+        materialService.deleteMaterial(userDetails.getUserId(), materialId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{materialId}/files/{fileId}")
