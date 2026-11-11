@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,6 +41,18 @@ public class CreativeMaterialController {
     ) {
         MaterialFilesRes response = materialService.addMaterialFiles(userDetails.getUserId(), materialId, files);
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
+    }
+
+    @PatchMapping(value = "/{materialId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SuccessResponse<MaterialFilesRes>> updateMaterialFiles(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("materialId") Long materialId,
+            @RequestPart(value = "newFiles", required = false) List<MultipartFile> newFiles,
+            @RequestParam(value = "deleteFileIds", required = false) List<Long> deleteFileIds
+    ) {
+        MaterialFilesRes response = materialService.updateMaterialFiles(
+                userDetails.getUserId(), materialId, newFiles, deleteFileIds);
+        return ResponseEntity.ok(SuccessResponse.from(response));
     }
 
     @GetMapping("/{materialId}")
