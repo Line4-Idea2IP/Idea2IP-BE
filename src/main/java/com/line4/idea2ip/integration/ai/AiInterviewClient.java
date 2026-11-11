@@ -18,7 +18,7 @@ public interface AiInterviewClient {
     record Answer(Long messageId, InterviewField field, String content) {
     }
 
-    record Evidence(String sourceId, MaterialType type, String title, String description) {
+    record Evidence(String sourceId, MaterialType type, String title, String description, String usedAi) {
     }
 
     record QuestionDraft(String content, String reason, List<String> sourceIds) {
