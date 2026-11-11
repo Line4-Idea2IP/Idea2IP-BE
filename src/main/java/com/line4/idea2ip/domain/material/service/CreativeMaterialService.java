@@ -36,7 +36,6 @@ public class CreativeMaterialService {
             throw new BaseException(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY);
         }
 
-        // Use a locking read to see the previous registration even under MySQL's repeatable-read isolation.
         int materialOrder = materialRepository.findFirstByProject_ProjectIdOrderByMaterialOrderDesc(projectId)
                 .map(CreativeMaterial::getMaterialOrder)
                 .orElse(0) + 1;
@@ -93,7 +92,7 @@ public class CreativeMaterialService {
         return toMaterialDetail(material);
     }
 
-    // Read attachments committed while waiting for the material lock rather than an earlier MySQL snapshot.
+    // Read attachments committed while waiting for the material lock.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteMaterial(Long userId, Long materialId) {
         Long projectId = materialRepository.findProjectIdByMaterialId(materialId)
@@ -107,7 +106,10 @@ public class CreativeMaterialService {
 
         materialRepository.delete(material);
         materialRepository.flush();
-        materialRepository.decreaseOrdersAfter(projectId, deletedOrder);
+        // Move each row into the free position before shifting the next row.
+        for (Long nextMaterialId : materialRepository.findIdsAfterOrder(projectId, deletedOrder)) {
+            materialRepository.decreaseOrder(nextMaterialId);
+        }
     }
 
     private CreativeMaterial getOwnedMaterial(Long userId, Long materialId) {
