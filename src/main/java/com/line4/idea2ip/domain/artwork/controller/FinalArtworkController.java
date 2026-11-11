@@ -2,6 +2,8 @@ package com.line4.idea2ip.domain.artwork.controller;
 
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateReq;
 import com.line4.idea2ip.domain.artwork.dto.ArtworkCreateRes;
+import com.line4.idea2ip.domain.artwork.dto.ArtworkImageRes;
+import com.line4.idea2ip.domain.artwork.service.FinalArtworkImageService;
 import com.line4.idea2ip.domain.artwork.service.FinalArtworkService;
 import com.line4.idea2ip.global.jwt.CustomUserDetails;
 import com.line4.idea2ip.global.response.SuccessResponse;
@@ -11,11 +13,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -23,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FinalArtworkController {
 
     private final FinalArtworkService artworkService;
+    private final FinalArtworkImageService artworkImageService;
 
     @PostMapping(value = "/{projectId}/artwork", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<SuccessResponse<ArtworkCreateRes>> createArtwork(
@@ -32,5 +38,15 @@ public class FinalArtworkController {
     ) {
         ArtworkCreateRes response = artworkService.createArtwork(userDetails.getUserId(), projectId, req);
         return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.created(response));
+    }
+
+    @PatchMapping(value = "/{projectId}/artwork/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SuccessResponse<ArtworkImageRes>> updateImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("projectId") Long projectId,
+            @RequestPart("file") MultipartFile file
+    ) {
+        ArtworkImageRes response = artworkImageService.updateImage(userDetails.getUserId(), projectId, file);
+        return ResponseEntity.ok(SuccessResponse.from(response));
     }
 }
