@@ -27,7 +27,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CreativeMaterialService {
@@ -72,18 +74,34 @@ public class CreativeMaterialService {
             throw new BaseException(ErrorResponseCode.INVALID_MATERIAL_IMAGE);
         }
 
-        for (MultipartFile file : files) {
-            String originalFileName = file.getOriginalFilename();
-            if (originalFileName != null) {
-                originalFileName = StringUtils.getFilename(originalFileName.replace('\\', '/'));
-            }
-            if (!StringUtils.hasText(originalFileName) || originalFileName.length() > 255) {
-                throw new BaseException(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY);
-            }
-            LocalImageStorage.StoredImage image = imageStorage.store(file);
-            material.addFile(originalFileName, image.fileName(), image.contentType());
+        storeMaterialFiles(material, files);
+        materialRepository.flush();
+        return new MaterialFilesRes(materialId, getMaterialFiles(material));
+    }
+
+    @Transactional
+    public MaterialFilesRes updateMaterialFiles(Long userId, Long materialId, List<MultipartFile> newFiles,
+                                                List<Long> deleteFileIds) {
+        CreativeMaterial material = getOwnedMaterialForUpdate(userId, materialId);
+        List<MultipartFile> filesToAdd = newFiles == null ? List.of() : newFiles;
+        Set<Long> idsToDelete = deleteFileIds == null ? Set.of() : new HashSet<>(deleteFileIds);
+        if (filesToAdd.isEmpty() && idsToDelete.isEmpty()) {
+            throw new BaseException(ErrorResponseCode.INVALID_MATERIAL_FILE_CHANGE);
         }
 
+        List<CreativeMaterialFile> filesToDelete = material.getFiles().stream()
+                .filter(file -> idsToDelete.contains(file.getFileId()))
+                .toList();
+        if (filesToDelete.size() != idsToDelete.size()
+                || material.getFiles().size() - filesToDelete.size() + filesToAdd.size() < 1) {
+            throw new BaseException(ErrorResponseCode.INVALID_MATERIAL_FILE_CHANGE);
+        }
+
+        storeMaterialFiles(material, filesToAdd);
+        material.removeFiles(filesToDelete);
+        for (CreativeMaterialFile file : filesToDelete) {
+            imageStorage.deleteAfterCommit(file.getStorageKey());
+        }
         materialRepository.flush();
         return new MaterialFilesRes(materialId, getMaterialFiles(material));
     }
@@ -160,6 +178,20 @@ public class CreativeMaterialService {
                 .orElseThrow(() -> new BaseException(ErrorResponseCode.MATERIAL_NOT_FOUND));
         projectService.verifyOwner(material.getProject(), userId);
         return material;
+    }
+
+    private void storeMaterialFiles(CreativeMaterial material, List<MultipartFile> files) {
+        for (MultipartFile file : files) {
+            String originalFileName = file.getOriginalFilename();
+            if (originalFileName != null) {
+                originalFileName = StringUtils.getFilename(originalFileName.replace('\\', '/'));
+            }
+            if (!StringUtils.hasText(originalFileName) || originalFileName.length() > 255) {
+                throw new BaseException(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY);
+            }
+            LocalImageStorage.StoredImage image = imageStorage.store(file);
+            material.addFile(originalFileName, image.fileName(), image.contentType());
+        }
     }
 
     private MaterialDetailRes toMaterialDetail(CreativeMaterial material) {
