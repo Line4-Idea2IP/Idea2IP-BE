@@ -40,3 +40,7 @@ out/
 src/main/resources/application-secret.properties
 /uploads/
 /private/report-pdfs/
+/deploy/.env
+/deploy/.deploy.lock
+/deploy/.release
+/deploy/.release.tmp

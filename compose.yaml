@@ -1,0 +1,75 @@
+name: idea2ip
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: idea2ip
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
+      IDEA2IP_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/init-postgres.sh:/docker-entrypoint-initdb.d/01-idea2ip-role.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "idea2ip_app", "-d", "idea2ip"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rag:
+    image: ghcr.io/line4-idea2ip/idea2ip-rag:${RELEASE_SHA:?Set RELEASE_SHA}
+    restart: unless-stopped
+    environment:
+      IDEA2IP_MODE: live
+      IDEA2IP_RETRIEVAL: none
+      IDEA2IP_LLM_BASE_URL: ${IDEA2IP_LLM_BASE_URL:?Set the desktop llama.cpp URL}
+      IDEA2IP_LLM_MODEL: ${IDEA2IP_LLM_MODEL:-idea2ip-vl}
+      IDEA2IP_SERVICE_TOKEN: ${BRIEF_AI_TOKEN:?Set BRIEF_AI_TOKEN}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  backend:
+    image: ghcr.io/line4-idea2ip/idea2ip-be:${RELEASE_SHA:?Set RELEASE_SHA}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rag:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/idea2ip
+      DATABASE_USERNAME: idea2ip_app
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-3600000}
+      BRIEF_AI_MODE: live
+      BRIEF_AI_BASE_URL: http://rag:8000
+      BRIEF_AI_TOKEN: ${BRIEF_AI_TOKEN:?Set BRIEF_AI_TOKEN}
+      BRIEF_PDF_FONT: /opt/idea2ip/NanumGothic.ttf
+      BRIEF_PDF_DIR: /data/report-pdfs
+      PROJECT_THUMBNAIL_DIR: /data/uploads/project-thumbnails
+      MATERIAL_IMAGE_DIR: /data/uploads/material-images
+      ARTWORK_IMAGE_DIR: /data/uploads/artwork-images
+      SPRING_JPA_SHOW_SQL: "false"
+    volumes:
+      - uploads:/data/uploads
+      - report-pdfs:/data/report-pdfs
+    healthcheck:
+      # Authentication rejection also confirms the web server is accepting requests.
+      test: ["CMD-SHELL", "case \"$$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:8080/api/projects)\" in 200|401|403) exit 0;; *) exit 1;; esac"]
+      interval: 10s
+      timeout: 5s
+      retries: 9
+      start_period: 30s
+
+volumes:
+  postgres-data:
+  uploads:
+  report-pdfs:
