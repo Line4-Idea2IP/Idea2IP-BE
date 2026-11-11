@@ -235,7 +235,8 @@ public class InterviewService {
         List<Evidence> evidence = materials.stream()
                 .flatMap(material -> material.getFiles().stream().map(file ->
                         new Evidence(InterviewReadinessService.reference(material, file).sourceId(),
-                                material.getMaterialType(), material.getTitle(), material.getDescription())))
+                                material.getMaterialType(), material.getTitle(), material.getDescription(),
+                                material.getUsedAi())))
                 .toList();
         return new Context(project.getProjectId(), project.getTitle(), UUID.randomUUID().toString(), answers, evidence);
     }

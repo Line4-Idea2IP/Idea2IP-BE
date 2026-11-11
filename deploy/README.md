@@ -1,6 +1,6 @@
 # 미니 PC 배포
 
-미니 PC의 Compose가 Spring, FastAPI, PostgreSQL을 실행합니다. FastAPI는 데스크탑에서 실행 중인 llama.cpp의 사설 주소를 사용합니다. 인터뷰는 현재 mock이고 창작 기여와 Brief는 live입니다.
+미니 PC의 Compose가 Spring, FastAPI, PostgreSQL을 실행합니다. Spring은 인터뷰 질문을 생성할 때 데스크탑의 llama.cpp를 직접 호출합니다. 창작 기여와 Brief는 FastAPI를 통해 같은 모델을 사용합니다. 인터뷰 답변의 완료 여부는 기존 규칙으로 판정합니다.
 
 ## 이미지 게시
 
@@ -29,6 +29,6 @@ bash deploy/deploy.sh <이미지-게시가-완료된-전체-백엔드-SHA>
 
 ## 배포 확인과 복구
 
-로그인 후 테스트 프로젝트에서 최종 작품 등록, 인터뷰 완료, 기여 확정, live Brief 생성과 PDF 다운로드를 확인하세요. Spring 컨테이너를 다시 만들어도 같은 버전의 PDF 해시가 유지되는지 확인합니다. 상태나 로그를 조회할 때는 `RELEASE_SHA=$(cat deploy/.release) docker compose --env-file deploy/.env ps`를 사용할 수 있습니다.
+로그인 후 새 테스트 프로젝트에서 최종 작품 등록, 인터뷰 첫 질문과 후속 질문, 기여 확정, live Brief 생성과 PDF 다운로드를 확인하세요. 모델 호출이 실패하면 인터뷰 API는 `503 INTERVIEW_503`을 반환합니다. 답변 제출 뒤 다음 질문 생성에 실패했다면 같은 `requestId`와 답변으로 다시 요청할 수 있습니다. Spring 컨테이너를 다시 만들어도 같은 버전의 PDF 해시가 유지되는지 확인합니다. 상태나 로그를 조회할 때는 `RELEASE_SHA=$(cat deploy/.release) docker compose --env-file deploy/.env ps`를 사용할 수 있습니다.
 
 정상 배포 SHA는 `deploy/.release`에 저장됩니다. 이전 성공 SHA를 배포 명령에 전달하면 해당 이미지 쌍으로 돌아갑니다. 컨테이너 시작이 실패하면 스크립트는 저장된 이전 SHA의 로컬 이미지로 복구를 시도합니다. 이미지 복구는 DB 데이터나 스키마를 되돌리지 않으므로 DB 스키마가 바뀌는 배포 전에 백업하세요. 이 구성은 기존 Spring의 Hibernate 스키마 갱신 설정을 사용합니다. 볼륨을 삭제하는 `docker compose down -v`는 개발 데이터를 폐기할 때만 사용하세요.
