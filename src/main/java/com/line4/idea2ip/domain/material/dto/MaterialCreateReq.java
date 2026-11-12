@@ -9,9 +9,13 @@ import java.time.LocalDate;
 
 public record MaterialCreateReq(
         @NotNull(message = "자료 유형을 선택해주세요.") MaterialType materialType,
-        @NotBlank(message = "자료 제목을 입력해주세요.") String title,
-        String description,
+        @NotBlank(message = "자료 제목을 입력해주세요.")
+        @Size(max = MaterialCreateReq.TITLE_MAX, message = "자료 제목은 200자 이하여야 합니다.") String title,
+        @Size(max = MaterialCreateReq.DESCRIPTION_MAX, message = "자료 설명은 5000자 이하여야 합니다.") String description,
         @Size(max = 255, message = "AI 도구 이름은 255자 이하여야 합니다.") String usedAi,
         LocalDate productionDate
 ) {
+    // Keeps each AI source (title, type, description and tool) under the 8000-character AI input limit.
+    public static final int TITLE_MAX = 200;
+    public static final int DESCRIPTION_MAX = 5000;
 }

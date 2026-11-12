@@ -3,6 +3,7 @@ package com.line4.idea2ip.domain.contribution;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.contribution.ContributionModels.*;
 import com.line4.idea2ip.domain.interview.entity.AiInterview;
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
@@ -166,7 +167,7 @@ public class ContributionService {
             return;
         }
         var stored = stored(review);
-        Map<Key, Proposal> proposals = proposals(work.input(), candidates.candidates());
+        Map<Key, Proposal> proposals = proposals(work.input(), candidates.candidates(), decided(stored));
         boolean changed = false;
         for (var entry : proposals.entrySet()) {
             var key = entry.getKey();
@@ -202,14 +203,38 @@ public class ContributionService {
         return generations.findById(id).orElseThrow();
     }
 
-    private Map<Key, Proposal> proposals(Input input, List<Candidate> candidates) {
+    /**
+     * What the user has already decided. Steps that are not UNREVIEWED never accept a new proposal, so:
+     * an answer held by such a step stays on it even if its material link changed (a confirmed or excluded
+     * statement never reappears as a new candidate or duplicates in the report), and an undecided answer
+     * whose link now points at such a step becomes its own interview-statement candidate instead of being lost.
+     */
+    record Decided(Map<String, Key> answers, Set<Key> steps) {
+        static final Decided NONE = new Decided(Map.of(), Set.of());
+    }
+
+    static Decided decided(List<ContributionStep> stored) {
+        Map<String, Key> answers = new HashMap<>();
+        Set<Key> steps = new HashSet<>();
+        for (var step : stored) {
+            if (step.getStatus() == StepStatus.UNREVIEWED) continue;
+            var key = new Key(step.getKind(), step.getResourceId());
+            steps.add(key);
+            for (var evidence : step.evidence()) {
+                if (evidence.sourceId().startsWith("answer:")) answers.putIfAbsent(evidence.sourceId(), key);
+            }
+        }
+        return new Decided(Map.copyOf(answers), Set.copyOf(steps));
+    }
+
+    static Map<Key, Proposal> proposals(Input input, List<Candidate> candidates, Decided decided) {
         Map<String, Source> sources = new HashMap<>();
         input.sources().forEach(source -> sources.put(source.sourceId(), source));
         Map<Key, Proposal> results = new LinkedHashMap<>();
         List<Candidate> grounded = new ArrayList<>(candidates);
         for (var source : input.sources()) {
             if (source.messageId() != null && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)")
-                    && !Set.of("없음", "없어요", "없습니다", "해당 없음").contains(source.content().replaceFirst("[.]$", "").strip())) {
+                    && !InterviewFieldState.isNotApplicableAnswer(source.content())) {
                 grounded.add(new Candidate("human_created", source.content(), List.of(source.sourceId())));
             }
         }
@@ -219,11 +244,13 @@ public class ContributionService {
                 if (source == null || source.messageId() == null || !source.content().contains(candidate.statement())) {
                     throw new Failure("AI_RESULT_INVALID", true);
                 }
-                boolean directEdit = candidate.category().equals("human_edit") && "human_edit".equals(source.targetField());
-                boolean directCreation = source.locator().endsWith("(HUMAN_CREATED_ELEMENT)")
-                        && !Set.of("없음", "없어요", "없습니다", "해당 없음").contains(source.content().replaceFirst("[.]$", "").strip());
+                // The AI reports "no such work" answers as statements; they are not contributions.
+                boolean declined = InterviewFieldState.isNotApplicableAnswer(source.content());
+                boolean directEdit = !declined && candidate.category().equals("human_edit")
+                        && "human_edit".equals(source.targetField());
+                boolean directCreation = !declined && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)");
                 if (!directEdit && !directCreation) continue;
-                var proposal = proposal(results, sources, source);
+                var proposal = proposal(results, sources, source, decided);
                 var statements = directEdit ? proposal.edits : proposal.elements;
                 statements.add(candidate.statement());
                 proposal.evidence.putIfAbsent(id, Evidence.from(source, candidate.statement()));
@@ -231,7 +258,7 @@ public class ContributionService {
         }
         for (var source : input.sources()) {
             if (source.messageId() == null || !"ai_usage".equals(source.targetField())) continue;
-            var proposal = proposal(results, sources, source);
+            var proposal = proposal(results, sources, source, decided);
             if (source.locator().endsWith("(AI_TOOL)")) proposal.tools.add(source.content());
             if (source.locator().endsWith("(AI_PURPOSE)")) proposal.purposes.add(source.content());
             if (source.locator().endsWith("(AI_OUTPUT_USAGE)")) proposal.outputs.add(source.content());
@@ -240,12 +267,25 @@ public class ContributionService {
         return results;
     }
 
-    private Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source) {
-        var material = source.materialId() == null ? null : sources.get("material:" + source.materialId());
-        var key = material == null ? new Key(Kind.INTERVIEW_STATEMENT, source.messageId())
-                : new Key(Kind.MATERIAL, source.materialId());
-        var proposal = results.computeIfAbsent(key, ignored -> new Proposal(material == null ? source.title() : material.title()));
-        if (material != null) proposal.evidence.putIfAbsent(material.sourceId(), Evidence.from(material, null));
+    private static Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source,
+                                     Decided decided) {
+        var key = decided.answers().get(source.sourceId());
+        Source material;
+        if (key != null) {
+            material = key.kind() == Kind.MATERIAL ? sources.get("material:" + key.resourceId()) : null;
+        } else {
+            material = source.materialId() == null ? null : sources.get("material:" + source.materialId());
+            key = material == null ? new Key(Kind.INTERVIEW_STATEMENT, source.messageId())
+                    : new Key(Kind.MATERIAL, source.materialId());
+            if (decided.steps().contains(key)) {
+                // The decided step would ignore this proposal; keep the answer reviewable on its own.
+                material = null;
+                key = new Key(Kind.INTERVIEW_STATEMENT, source.messageId());
+            }
+        }
+        var linked = material;
+        var proposal = results.computeIfAbsent(key, ignored -> new Proposal(linked == null ? source.title() : linked.title()));
+        if (linked != null) proposal.evidence.putIfAbsent(linked.sourceId(), Evidence.from(linked, null));
         return proposal;
     }
 
@@ -341,7 +381,7 @@ public class ContributionService {
     }
 
     public record Work(Long id, UUID token, Input input) {}
-    private record Key(Kind kind, Long resourceId) {}
+    record Key(Kind kind, Long resourceId) {}
 
     private static final class Proposal {
         private final String title;
