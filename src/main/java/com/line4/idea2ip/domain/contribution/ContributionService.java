@@ -167,7 +167,7 @@ public class ContributionService {
             return;
         }
         var stored = stored(review);
-        Map<Key, Proposal> proposals = proposals(work.input(), candidates.candidates(), reviewedAnswers(stored));
+        Map<Key, Proposal> proposals = proposals(work.input(), candidates.candidates(), decided(stored));
         boolean changed = false;
         for (var entry : proposals.entrySet()) {
             var key = entry.getKey();
@@ -204,24 +204,30 @@ public class ContributionService {
     }
 
     /**
-     * Interview answers already decided by the user, keyed to the step that holds the decision. A regenerated
-     * proposal for such an answer stays on that step even if its material link changed, so a confirmed or
-     * excluded statement never reappears as a new UNREVIEWED candidate (or duplicates in the report).
+     * What the user has already decided. Steps that are not UNREVIEWED never accept a new proposal, so:
+     * an answer held by such a step stays on it even if its material link changed (a confirmed or excluded
+     * statement never reappears as a new candidate or duplicates in the report), and an undecided answer
+     * whose link now points at such a step becomes its own interview-statement candidate instead of being lost.
      */
-    static Map<String, Key> reviewedAnswers(List<ContributionStep> stored) {
-        Map<String, Key> pinned = new HashMap<>();
-        for (var step : stored) {
-            if (step.getStatus() == StepStatus.UNREVIEWED) continue;
-            for (var evidence : step.evidence()) {
-                if (evidence.sourceId().startsWith("answer:")) {
-                    pinned.putIfAbsent(evidence.sourceId(), new Key(step.getKind(), step.getResourceId()));
-                }
-            }
-        }
-        return pinned;
+    record Decided(Map<String, Key> answers, Set<Key> steps) {
+        static final Decided NONE = new Decided(Map.of(), Set.of());
     }
 
-    static Map<Key, Proposal> proposals(Input input, List<Candidate> candidates, Map<String, Key> pinned) {
+    static Decided decided(List<ContributionStep> stored) {
+        Map<String, Key> answers = new HashMap<>();
+        Set<Key> steps = new HashSet<>();
+        for (var step : stored) {
+            if (step.getStatus() == StepStatus.UNREVIEWED) continue;
+            var key = new Key(step.getKind(), step.getResourceId());
+            steps.add(key);
+            for (var evidence : step.evidence()) {
+                if (evidence.sourceId().startsWith("answer:")) answers.putIfAbsent(evidence.sourceId(), key);
+            }
+        }
+        return new Decided(Map.copyOf(answers), Set.copyOf(steps));
+    }
+
+    static Map<Key, Proposal> proposals(Input input, List<Candidate> candidates, Decided decided) {
         Map<String, Source> sources = new HashMap<>();
         input.sources().forEach(source -> sources.put(source.sourceId(), source));
         Map<Key, Proposal> results = new LinkedHashMap<>();
@@ -244,7 +250,7 @@ public class ContributionService {
                         && "human_edit".equals(source.targetField());
                 boolean directCreation = !declined && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)");
                 if (!directEdit && !directCreation) continue;
-                var proposal = proposal(results, sources, source, pinned);
+                var proposal = proposal(results, sources, source, decided);
                 var statements = directEdit ? proposal.edits : proposal.elements;
                 statements.add(candidate.statement());
                 proposal.evidence.putIfAbsent(id, Evidence.from(source, candidate.statement()));
@@ -252,7 +258,7 @@ public class ContributionService {
         }
         for (var source : input.sources()) {
             if (source.messageId() == null || !"ai_usage".equals(source.targetField())) continue;
-            var proposal = proposal(results, sources, source, pinned);
+            var proposal = proposal(results, sources, source, decided);
             if (source.locator().endsWith("(AI_TOOL)")) proposal.tools.add(source.content());
             if (source.locator().endsWith("(AI_PURPOSE)")) proposal.purposes.add(source.content());
             if (source.locator().endsWith("(AI_OUTPUT_USAGE)")) proposal.outputs.add(source.content());
@@ -262,8 +268,8 @@ public class ContributionService {
     }
 
     private static Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source,
-                                     Map<String, Key> pinned) {
-        var key = pinned.get(source.sourceId());
+                                     Decided decided) {
+        var key = decided.answers().get(source.sourceId());
         Source material;
         if (key != null) {
             material = key.kind() == Kind.MATERIAL ? sources.get("material:" + key.resourceId()) : null;
@@ -271,9 +277,15 @@ public class ContributionService {
             material = source.materialId() == null ? null : sources.get("material:" + source.materialId());
             key = material == null ? new Key(Kind.INTERVIEW_STATEMENT, source.messageId())
                     : new Key(Kind.MATERIAL, source.materialId());
+            if (decided.steps().contains(key)) {
+                // The decided step would ignore this proposal; keep the answer reviewable on its own.
+                material = null;
+                key = new Key(Kind.INTERVIEW_STATEMENT, source.messageId());
+            }
         }
-        var proposal = results.computeIfAbsent(key, ignored -> new Proposal(material == null ? source.title() : material.title()));
-        if (material != null) proposal.evidence.putIfAbsent(material.sourceId(), Evidence.from(material, null));
+        var linked = material;
+        var proposal = results.computeIfAbsent(key, ignored -> new Proposal(linked == null ? source.title() : linked.title()));
+        if (linked != null) proposal.evidence.putIfAbsent(linked.sourceId(), Evidence.from(linked, null));
         return proposal;
     }
 

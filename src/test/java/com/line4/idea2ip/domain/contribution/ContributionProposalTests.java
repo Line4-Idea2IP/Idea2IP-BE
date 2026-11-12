@@ -35,7 +35,7 @@ class ContributionProposalTests {
     }
 
     private static Map<Key, ?> proposals(Input input, List<Candidate> candidates) {
-        return ContributionService.proposals(input, candidates, Map.of());
+        return ContributionService.proposals(input, candidates, ContributionService.Decided.NONE);
     }
 
     @Test void declinedEditAnswerFromAiIsNotProposedAsEdit() {
@@ -66,12 +66,31 @@ class ContributionProposalTests {
         unreviewed.propose(new Content(null, List.of(), List.of("다른 답변")),
                 List.of(Evidence.from(answer(31, "HUMAN_EDITED_EXPRESSION", "human_edit", "다른 답변"), "다른 답변")));
 
-        var pinned = ContributionService.reviewedAnswers(List.of(oldStep, unreviewed));
-        assertEquals(Map.of("answer:30", new Key(Kind.MATERIAL, 5L)), pinned);
+        var decided = ContributionService.decided(List.of(oldStep, unreviewed));
+        assertEquals(Map.of("answer:30", new Key(Kind.MATERIAL, 5L)), decided.answers());
+        assertEquals(java.util.Set.of(new Key(Kind.MATERIAL, 5L)), decided.steps());
 
         var candidates = List.of(new Candidate("human_edit", edit.content(), List.of(edit.sourceId())));
         var result = ContributionService.proposals(
-                input(material(5, "구도 참고 자료"), material(6, "색 대비 자료"), edit), candidates, pinned);
+                input(material(5, "구도 참고 자료"), material(6, "색 대비 자료"), edit), candidates, decided);
         assertEquals(java.util.Set.of(new Key(Kind.MATERIAL, 5L)), result.keySet());
+    }
+
+    @Test void undecidedAnswerMovedOntoDecidedStepBecomesItsOwnCandidate() {
+        // The edit was an UNREVIEWED candidate under material 5; material 6 was already confirmed without it.
+        var edit = answer(30, "HUMAN_EDITED_EXPRESSION", "human_edit", "시계판을 파란색으로 직접 칠했습니다.", 6L);
+        var oldStep = new ContributionStep(null, Kind.MATERIAL, 5L, "구도 참고 자료");
+        oldStep.propose(new Content(null, List.of(), List.of(edit.content())),
+                List.of(Evidence.from(edit, edit.content())));
+        var confirmed = new ContributionStep(null, Kind.MATERIAL, 6L, "색 대비 자료");
+        confirmed.propose(new Content(null, List.of(), List.of("이전에 확정한 수정")), List.of());
+        confirmed.apply(Decision.CONFIRM, null);
+
+        var decided = ContributionService.decided(List.of(oldStep, confirmed));
+        assertTrue(decided.answers().isEmpty());
+        var candidates = List.of(new Candidate("human_edit", edit.content(), List.of(edit.sourceId())));
+        var result = ContributionService.proposals(
+                input(material(5, "구도 참고 자료"), material(6, "색 대비 자료"), edit), candidates, decided);
+        assertEquals(java.util.Set.of(new Key(Kind.INTERVIEW_STATEMENT, 30L)), result.keySet());
     }
 }
