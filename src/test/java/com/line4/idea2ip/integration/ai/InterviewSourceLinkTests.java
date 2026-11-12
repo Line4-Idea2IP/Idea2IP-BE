@@ -36,4 +36,19 @@ class InterviewSourceLinkTests {
         assertEquals("첨부 자료를 참고했나요?",
                 LlamaInterviewClient.withoutSourceIds("material:9:file:9를 참고했나요?", evidence));
     }
+
+    @Test void longTitlesUseGenericNameAndQuestionStaysWithinLimit() {
+        var longTitle = "가".repeat(120);
+        var evidence = List.of(new Evidence("material:1", MaterialType.AI_ASSISTED, longTitle, null, null),
+                new Evidence("material:2", MaterialType.MANUAL_EDIT, "가".repeat(40), null, null));
+        assertEquals("첨부 자료를 참고했나요?", LlamaInterviewClient.withoutSourceIds("material:1를 참고했나요?", evidence));
+
+        // A 500-character model question with many short IDs would exceed the limit if every ID became a title.
+        String filler = "나".repeat(500 - 20 * 11);
+        String question = filler + "material:2 ".repeat(20);
+        assertEquals(500, question.length());
+        String result = LlamaInterviewClient.withoutSourceIds(question, evidence);
+        assertTrue(result.length() <= LlamaInterviewClient.QUESTION_MAX);
+        assertFalse(result.contains("material:"));
+    }
 }

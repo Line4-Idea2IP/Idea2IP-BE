@@ -37,6 +37,10 @@ class LlamaInterviewClient implements AiInterviewClient {
             질문에 실제 언급한 자료의 sourceId만 source_ids에 적는다. 없으면 빈 배열을 사용한다.
             target_field에는 입력의 targetField를 그대로 반환한다.
             """;
+    // Matches InterviewService's question length check.
+    static final int QUESTION_MAX = 500;
+    private static final int TITLE_IN_QUESTION_MAX = 40;
+    private static final String GENERIC_MATERIAL = "첨부 자료";
     private static final Pattern RAW_SOURCE_ID = Pattern.compile("material:\\d+(?::file:\\d+)?");
     private static final Pattern PARENTHESIZED_ID = Pattern.compile("\\s*\\([^()]*material:\\d+[^()]*\\)");
 
@@ -104,21 +108,32 @@ class LlamaInterviewClient implements AiInterviewClient {
         boolean followUp = !answers.isEmpty();
         String reason = followUp ? "앞선 답변의 구체적인 내용을 확인합니다." : "창작 과정의 해당 항목을 확인합니다.";
         String question = withoutSourceIds(draft.path("question").asString(), evidence);
-        if (question.isBlank()) {
+        if (question.isBlank() || question.length() > QUESTION_MAX) {
             throw invalidResponse();
         }
         return new QuestionDraft(question, reason, List.copyOf(sourceIds));
     }
 
-    /** Internal IDs are for linking evidence only; users see material titles. */
+    /**
+     * Internal IDs are for linking evidence only; users see material titles. Short titles replace their IDs;
+     * long titles, unknown IDs, or a result over the question limit fall back to the generic "첨부 자료",
+     * which is shorter than any ID, so replacement never pushes a valid question over the limit.
+     */
     static String withoutSourceIds(String question, List<Evidence> evidence) {
+        String titled = replaceIds(question, evidence, true);
+        return titled.length() <= QUESTION_MAX ? titled : replaceIds(question, evidence, false);
+    }
+
+    private static String replaceIds(String question, List<Evidence> evidence, boolean useTitles) {
         String text = PARENTHESIZED_ID.matcher(question).replaceAll("");
         // Longest IDs first so "material:5:file:5" never replaces the prefix of "material:5:file:50".
         for (Evidence item : evidence.stream()
                 .sorted(java.util.Comparator.comparingInt((Evidence e) -> e.sourceId().length()).reversed()).toList()) {
-            text = text.replace(item.sourceId(), "'" + item.title() + "'");
+            boolean shortTitle = useTitles && item.title() != null && !item.title().isBlank()
+                    && item.title().length() <= TITLE_IN_QUESTION_MAX;
+            text = text.replace(item.sourceId(), shortTitle ? "'" + item.title() + "'" : GENERIC_MATERIAL);
         }
-        return RAW_SOURCE_ID.matcher(text).replaceAll("첨부 자료").strip();
+        return RAW_SOURCE_ID.matcher(text).replaceAll(GENERIC_MATERIAL).strip();
     }
 
     @Override

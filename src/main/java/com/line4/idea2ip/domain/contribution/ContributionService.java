@@ -167,7 +167,7 @@ public class ContributionService {
             return;
         }
         var stored = stored(review);
-        Map<Key, Proposal> proposals = proposals(work.input(), candidates.candidates());
+        Map<Key, Proposal> proposals = proposals(work.input(), candidates.candidates(), reviewedAnswers(stored));
         boolean changed = false;
         for (var entry : proposals.entrySet()) {
             var key = entry.getKey();
@@ -203,7 +203,25 @@ public class ContributionService {
         return generations.findById(id).orElseThrow();
     }
 
-    static Map<Key, Proposal> proposals(Input input, List<Candidate> candidates) {
+    /**
+     * Interview answers already decided by the user, keyed to the step that holds the decision. A regenerated
+     * proposal for such an answer stays on that step even if its material link changed, so a confirmed or
+     * excluded statement never reappears as a new UNREVIEWED candidate (or duplicates in the report).
+     */
+    static Map<String, Key> reviewedAnswers(List<ContributionStep> stored) {
+        Map<String, Key> pinned = new HashMap<>();
+        for (var step : stored) {
+            if (step.getStatus() == StepStatus.UNREVIEWED) continue;
+            for (var evidence : step.evidence()) {
+                if (evidence.sourceId().startsWith("answer:")) {
+                    pinned.putIfAbsent(evidence.sourceId(), new Key(step.getKind(), step.getResourceId()));
+                }
+            }
+        }
+        return pinned;
+    }
+
+    static Map<Key, Proposal> proposals(Input input, List<Candidate> candidates, Map<String, Key> pinned) {
         Map<String, Source> sources = new HashMap<>();
         input.sources().forEach(source -> sources.put(source.sourceId(), source));
         Map<Key, Proposal> results = new LinkedHashMap<>();
@@ -226,7 +244,7 @@ public class ContributionService {
                         && "human_edit".equals(source.targetField());
                 boolean directCreation = !declined && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)");
                 if (!directEdit && !directCreation) continue;
-                var proposal = proposal(results, sources, source);
+                var proposal = proposal(results, sources, source, pinned);
                 var statements = directEdit ? proposal.edits : proposal.elements;
                 statements.add(candidate.statement());
                 proposal.evidence.putIfAbsent(id, Evidence.from(source, candidate.statement()));
@@ -234,7 +252,7 @@ public class ContributionService {
         }
         for (var source : input.sources()) {
             if (source.messageId() == null || !"ai_usage".equals(source.targetField())) continue;
-            var proposal = proposal(results, sources, source);
+            var proposal = proposal(results, sources, source, pinned);
             if (source.locator().endsWith("(AI_TOOL)")) proposal.tools.add(source.content());
             if (source.locator().endsWith("(AI_PURPOSE)")) proposal.purposes.add(source.content());
             if (source.locator().endsWith("(AI_OUTPUT_USAGE)")) proposal.outputs.add(source.content());
@@ -243,10 +261,17 @@ public class ContributionService {
         return results;
     }
 
-    private static Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source) {
-        var material = source.materialId() == null ? null : sources.get("material:" + source.materialId());
-        var key = material == null ? new Key(Kind.INTERVIEW_STATEMENT, source.messageId())
-                : new Key(Kind.MATERIAL, source.materialId());
+    private static Proposal proposal(Map<Key, Proposal> results, Map<String, Source> sources, Source source,
+                                     Map<String, Key> pinned) {
+        var key = pinned.get(source.sourceId());
+        Source material;
+        if (key != null) {
+            material = key.kind() == Kind.MATERIAL ? sources.get("material:" + key.resourceId()) : null;
+        } else {
+            material = source.materialId() == null ? null : sources.get("material:" + source.materialId());
+            key = material == null ? new Key(Kind.INTERVIEW_STATEMENT, source.messageId())
+                    : new Key(Kind.MATERIAL, source.materialId());
+        }
         var proposal = results.computeIfAbsent(key, ignored -> new Proposal(material == null ? source.title() : material.title()));
         if (material != null) proposal.evidence.putIfAbsent(material.sourceId(), Evidence.from(material, null));
         return proposal;
@@ -344,7 +369,7 @@ public class ContributionService {
     }
 
     public record Work(Long id, UUID token, Input input) {}
-    private record Key(Kind kind, Long resourceId) {}
+    record Key(Kind kind, Long resourceId) {}
 
     private static final class Proposal {
         private final String title;
