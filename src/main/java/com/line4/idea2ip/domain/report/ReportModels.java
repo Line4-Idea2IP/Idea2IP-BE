@@ -21,11 +21,12 @@ public final class ReportModels {
     public enum CheckStatus { READY, BLOCKED, WARNING }
 
     public enum SectionKey {
-        WORK_OVERVIEW("작품 개요"),
-        AI_USAGE("AI 활용"),
-        HUMAN_CONTRIBUTION("사용자가 확인한 창작 기여"),
-        EVIDENCE_SUMMARY("근거 목록"),
-        GAPS_AND_GUIDANCE("보완 사항·공식 지침");
+        // Titles match the report screen's five items.
+        WORK_OVERVIEW("신청할 저작물 전체 개요"),
+        AI_USAGE("활용된 생성형 AI 산출물"),
+        HUMAN_CONTRIBUTION("인간의 창작적 표현 부분 (사용자 확인)"),
+        EVIDENCE_SUMMARY("창작 과정 참고자료"),
+        GAPS_AND_GUIDANCE("추가 확인 및 보완사항");
 
         private final String title;
 

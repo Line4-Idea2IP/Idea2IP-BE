@@ -19,9 +19,25 @@ class ReportContentAssemblerTests {
         assertEquals(List.of("WORK_OVERVIEW", "AI_USAGE", "HUMAN_CONTRIBUTION", "EVIDENCE_SUMMARY", "GAPS_AND_GUIDANCE"),
                 result.sections().stream().map(Section::sectionKey).toList());
         var human = result.sections().get(2);
-        assertEquals("사용자가 확인한 창작 기여", human.title());
+        assertEquals("인간의 창작적 표현 부분 (사용자 확인)", human.title());
         assertEquals(List.of("사용자 수정 단계 · 직접 창작: 확정 창작", "사용자 수정 단계 · 직접 수정: 확정 수정"), human.paragraphs());
         assertTrue(result.sections().get(4).paragraphs().contains(ReportContentAssembler.NO_OFFICIAL_GUIDE));
+    }
+
+    @Test void internalInterviewTitlesAreShownInPlainKorean() {
+        var answer = new Evidence("answer:8", "USER_STATEMENT", "인터뷰 답변 8 (HUMAN_CREATED_ELEMENT)", "사슬을 구성했습니다.",
+                null, null, null, null, null, null, null, null);
+        var material = new Evidence("material:5", "ATTACHED_FILE", "구도 자료", null, null, null, null, null, null, null, null, null);
+        var interviewOnly = new Confirmed("인터뷰 답변 8 (HUMAN_CREATED_ELEMENT)",
+                new com.line4.idea2ip.domain.contribution.ContributionModels.Content(null, List.of("사슬을 구성했습니다."), List.of()),
+                List.of(answer));
+        var linked = new Confirmed("구도 자료",
+                new com.line4.idea2ip.domain.contribution.ContributionModels.Content(null, List.of(), List.of("색을 바꿨습니다.")),
+                List.of(material));
+        var result = assembler.assemble(new InputSnapshot(ai, List.of(interviewOnly, linked), null, List.of()), draft, null, null);
+        assertEquals(List.of("직접 창작: 사슬을 구성했습니다.", "구도 자료 · 직접 수정: 색을 바꿨습니다."),
+                result.sections().get(2).paragraphs());
+        assertEquals(List.of("사용자 진술 · 직접 창작한 부분", "첨부자료 · 구도 자료"), result.sections().get(3).paragraphs());
     }
 
     @Test void sectionsCiteOnlyAnswersBehindTheirStatements() {

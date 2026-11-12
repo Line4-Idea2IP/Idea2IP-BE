@@ -48,7 +48,9 @@ class ReportWorker {
                 service.fail(work, "PDF_TEMPLATE_UNAVAILABLE", false);
                 return;
             }
-            var bytes = renderer.render(work.input().aiInput().title(), work.versionNo(), content.sections(), content.sources());
+            var meta = new ReportPdfRenderer.Meta(work.createdAt() == null ? null : work.createdAt().toLocalDate(),
+                    java.util.Set.copyOf(content.editedSectionKeys()));
+            var bytes = renderer.render(work.input().aiInput().title(), work.versionNo(), meta, content.sections(), content.sources());
             var stored = pdfs.write(work.id(), work.token(), bytes);
             if (!service.publish(work, stored)) pdfs.discard(stored.key());
         } catch (BriefAiClient.Failure failure) {

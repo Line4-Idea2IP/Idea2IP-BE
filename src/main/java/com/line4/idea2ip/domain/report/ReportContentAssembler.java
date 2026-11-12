@@ -23,8 +23,10 @@ class ReportContentAssembler {
         Set<String> aiSourceIds = new LinkedHashSet<>();
         Set<String> humanSourceIds = new LinkedHashSet<>();
         for (var step : input.contributions()) {
-            human.addAll(step.content().humanCreatedElements().stream().map(text -> step.title() + " · 직접 창작: " + text).toList());
-            human.addAll(step.content().humanEdits().stream().map(text -> step.title() + " · 직접 수정: " + text).toList());
+            // Interview-only steps have internal titles ("인터뷰 답변 8 (HUMAN_CREATED_ELEMENT)"); show just the work.
+            String prefix = SourceLabels.isInterviewTitle(step.title()) ? "" : step.title() + " · ";
+            human.addAll(step.content().humanCreatedElements().stream().map(text -> prefix + "직접 창작: " + text).toList());
+            human.addAll(step.content().humanEdits().stream().map(text -> prefix + "직접 수정: " + text).toList());
             var usage = step.content().aiUsage();
             if (usage != null) {
                 var aiTexts = new ArrayList<String>();
@@ -64,7 +66,7 @@ class ReportContentAssembler {
 
         var summary = section(SectionKey.EVIDENCE_SUMMARY, sources.values().stream()
                 .filter(source -> !"OFFICIAL_GUIDE".equals(source.kind()))
-                .map(source -> source.title()).toList(), sources.values().stream()
+                .map(source -> SourceLabels.kind(source.kind()) + " · " + SourceLabels.title(source)).toList(), sources.values().stream()
                 .filter(source -> !"OFFICIAL_GUIDE".equals(source.kind())).map(Evidence::sourceId).toList());
         byKey.put(SectionKey.EVIDENCE_SUMMARY.name(), summary);
 

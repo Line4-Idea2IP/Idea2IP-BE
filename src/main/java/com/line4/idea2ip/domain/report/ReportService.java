@@ -148,7 +148,8 @@ public class ReportService {
         version.stage(version.getReportContent() == null ? Stage.COLLECTING_INPUT : Stage.RENDERING_PDF);
         return new Work(versionId, version.getVersionNo(), token, version.getOperation(), version.getInputSnapshot(),
                 version.getReportContent(), base == null ? null : base.getReportContent(),
-                base == null ? null : base.getInputSnapshot(), version.getEdits(), version.getTemplateVersion());
+                base == null ? null : base.getInputSnapshot(), version.getEdits(), version.getTemplateVersion(),
+                version.getCreatedAt());
     }
 
     @Transactional
@@ -275,5 +276,6 @@ public class ReportService {
     }
 
     record Work(Long id, int versionNo, UUID token, Operation operation, InputSnapshot input, Content draft,
-                Content base, InputSnapshot baseInput, List<SectionEdit> edits, String templateVersion) {}
+                Content base, InputSnapshot baseInput, List<SectionEdit> edits, String templateVersion,
+                java.time.LocalDateTime createdAt) {}
 }
