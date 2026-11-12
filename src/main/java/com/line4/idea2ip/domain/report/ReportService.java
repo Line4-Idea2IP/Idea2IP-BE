@@ -3,6 +3,8 @@ package com.line4.idea2ip.domain.report;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.contribution.ContributionService;
 import com.line4.idea2ip.domain.interview.entity.AiInterview;
+import com.line4.idea2ip.domain.interview.entity.InterviewField;
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
@@ -125,11 +127,12 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public PdfDownload download(Long userId, Long projectId, Long versionId) {
-        projects.getOwnedProject(userId, projectId);
+        Project project = projects.getOwnedProject(userId, projectId);
         var version = ownedVersion(projectId, versionId);
         if (version.status() != Status.READY) throw conflict("PDF_NOT_READY", "PDF가 아직 준비되지 않았습니다.");
         try {
-            return new PdfDownload(version.getVersionNo(), pdfs.read(version.getPdfStorageKey(), version.getPdfChecksum()));
+            return new PdfDownload(version.getVersionNo(), project.getTitle(),
+                    pdfs.read(version.getPdfStorageKey(), version.getPdfChecksum()));
         } catch (IOException | IllegalArgumentException exception) {
             throw new WorkflowException("PDF_STORAGE_ERROR", 500, "저장된 PDF를 읽을 수 없습니다.");
         }
@@ -204,7 +207,16 @@ public class ReportService {
                 check("MATERIAL_EVIDENCE_INCOMPLETE", material, true, "첨부 이미지가 있는 제작 자료를 보완해 주세요."));
         var blocked = checks.stream().filter(item -> item.status() == CheckStatus.BLOCKED).toList();
         var warnings = checks.stream().filter(item -> item.status() == CheckStatus.WARNING).toList();
-        return new Readiness(blocked.isEmpty(), checks, blocked, warnings, project.getInputRevision());
+        var artworkEntity = artworks.findByProject_ProjectId(id).orElse(null);
+        var interviewStates = new EnumMap<InterviewField, InterviewFieldState.Status>(InterviewField.class);
+        interviews.findByProject_ProjectId(id).ifPresent(value ->
+                value.getFieldStates().forEach(state -> interviewStates.put(state.field(), state.status())));
+        var sections = ReportReadinessSections.sections(new ReportReadinessSections.Inputs(
+                project.getArtworkType() == null ? null : project.getArtworkType().name(), project.getDescription(),
+                artwork, artworkEntity == null ? null : artworkEntity.getDescription(), contributions.confirmedSteps(id),
+                contributions.noContributionReason(id), interviewStates, evidence));
+        return new Readiness(blocked.isEmpty(), checks, blocked, warnings, project.getInputRevision(), sections,
+                ReportReadinessSections.summary(sections));
     }
 
     private Profile profile(Project project) {

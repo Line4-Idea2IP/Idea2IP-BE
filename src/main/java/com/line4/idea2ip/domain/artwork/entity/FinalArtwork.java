@@ -15,6 +15,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "final_artworks")
 @Getter
@@ -42,6 +44,9 @@ public class FinalArtwork extends BaseEntity {
     @Column(name = "original_file_name", length = 255)
     private String originalFileName;
 
+    /** When the current image was uploaded; null for images uploaded before the column existed. */
+    private LocalDateTime imageUploadedAt;
+
     public FinalArtwork(Project project, String title, String description) {
         this.project = project;
         this.title = title;
@@ -51,6 +56,7 @@ public class FinalArtwork extends BaseEntity {
     public void updateImage(String imagePath, String originalFileName) {
         this.imagePath = imagePath;
         this.originalFileName = originalFileName;
+        this.imageUploadedAt = imagePath == null ? null : LocalDateTime.now();
     }
 
     public void updateInfo(String title, String description) {

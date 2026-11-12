@@ -10,7 +10,8 @@ import java.util.Set;
 /**
  * Interview rules that hold whatever the answer evaluator decides, so an interview always reaches its end:
  * a field is asked at most {@link #MAX_ANSWERS_PER_FIELD} times, and answering that no AI tool was used
- * settles the other AI fields instead of asking about AI work that did not happen.
+ * settles the other AI fields instead of asking about AI work that did not happen. A field still unclear at
+ * the limit stays NEEDS_REVIEW (spec: "보완 필요") but is closed, so it is reported as a gap, not as done.
  */
 final class InterviewProgress {
     static final int MAX_ANSWERS_PER_FIELD = 3;
@@ -28,8 +29,9 @@ final class InterviewProgress {
                                            List<String> answersForField) {
         var settled = evaluation;
         if (evaluation.needsAnswer() && answersForField.size() >= MAX_ANSWERS_PER_FIELD) {
-            // Stop asking: keep what the user said and let the contribution review and report show it as given.
-            settled = new InterviewFieldState(evaluation.field(), Status.COMPLETED, String.join(" / ", answersForField));
+            // Stop asking but keep the gap: the report lists closed NEEDS_REVIEW fields as items to complete.
+            settled = new InterviewFieldState(evaluation.field(), Status.NEEDS_REVIEW,
+                    String.join(" / ", answersForField), true);
         }
         var result = settled;
         boolean noAi = result.field() == InterviewField.AI_TOOL && result.status() == Status.NOT_APPLICABLE;

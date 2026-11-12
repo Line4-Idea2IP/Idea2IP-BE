@@ -39,7 +39,21 @@ class InterviewProgressTests {
         var evaluation = new InterviewFieldState(AI_PURPOSE, Status.NEEDS_REVIEW, "몰라요");
         assertEquals(Status.NEEDS_REVIEW, status(InterviewProgress.apply(initial, evaluation, List.of("음", "몰라요")), AI_PURPOSE));
         var capped = InterviewProgress.apply(initial, evaluation, List.of("음", "글쎄", "몰라요"));
-        assertEquals(Status.COMPLETED, status(capped, AI_PURPOSE));
+        // Still unclear: the gap stays visible as NEEDS_REVIEW, but the field no longer holds the interview open.
+        assertEquals(Status.NEEDS_REVIEW, status(capped, AI_PURPOSE));
+        assertTrue(capped.get(1).closed());
+        assertFalse(capped.get(1).needsAnswer());
         assertEquals("음 / 글쎄 / 몰라요", capped.get(1).summary());
+    }
+
+    @Test void storedStatesWithoutTheFlagStayOpen() throws Exception {
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var old = mapper.readValue("{\"field\":\"AI_TOOL\",\"status\":\"NEEDS_REVIEW\",\"summary\":\"x\"}",
+                InterviewFieldState.class);
+        assertFalse(old.closed());
+        assertTrue(old.needsAnswer());
+        var roundTrip = mapper.readValue(mapper.writeValueAsString(
+                new InterviewFieldState(AI_TOOL, Status.NEEDS_REVIEW, "x", true)), InterviewFieldState.class);
+        assertTrue(roundTrip.closed());
     }
 }

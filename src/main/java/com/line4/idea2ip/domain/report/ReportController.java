@@ -11,6 +11,8 @@ import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
+
+import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -62,7 +64,7 @@ public class ReportController {
         var pdf = service.download(user.getUserId(), projectId, versionId);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename("copyright-brief-v" + pdf.versionNo() + ".pdf").build().toString())
+                        .filename(pdf.fileName(), StandardCharsets.UTF_8).build().toString())
                 .body(pdf.bytes());
     }
 }
