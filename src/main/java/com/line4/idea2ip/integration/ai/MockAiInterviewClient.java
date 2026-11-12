@@ -35,7 +35,10 @@ class MockAiInterviewClient implements AiInterviewClient {
     public QuestionDraft generateQuestion(Context context, InterviewField field) {
         String prompt = baseQuestion(field);
         boolean followUp = context.answers().stream().anyMatch(answer -> answer.field() == field);
-        if (followUp) {
+        var supplement = InterviewSupplement.next(field, InterviewSupplement.answersFor(context, field));
+        if (supplement.isPresent()) {
+            prompt = supplement.get().question;
+        } else if (followUp) {
             prompt = "앞선 답변을 조금 더 구체적으로 알려주세요. " + prompt;
         }
         MaterialType referenceType = referenceType(field);
@@ -44,13 +47,20 @@ class MockAiInterviewClient implements AiInterviewClient {
                 .map(Evidence::sourceId)
                 .limit(1)
                 .toList();
-        String reason = followUp ? "앞선 답변의 구체적인 내용을 확인합니다." : "창작 과정의 해당 항목을 확인합니다.";
+        String reason = supplement.map(value -> value.reason)
+                .orElse(followUp ? "앞선 답변의 구체적인 내용을 확인합니다." : "창작 과정의 해당 항목을 확인합니다.");
         return new QuestionDraft(prompt, reason, sourceIds);
     }
 
     @Override
     public InterviewFieldState analyzeAnswer(Context context, Answer answer) {
         String text = answer.content();
+        var answers = InterviewSupplement.answersWith(context, answer);
+        var earlier = answers.subList(0, answers.size() - 1);
+        if (InterviewSupplement.next(answer.field(), earlier).isPresent()) {
+            // This replies to the supplementary question; any reply, including "없습니다", completes the field.
+            return new InterviewFieldState(answer.field(), COMPLETED, earlier.getFirst() + " / " + text);
+        }
         if (InterviewFieldState.isNotApplicableAnswer(text)) {
             boolean allowed = answer.field() == InterviewField.HUMAN_CREATED_ELEMENT
                     || answer.field() == InterviewField.HUMAN_EDITED_EXPRESSION;
@@ -60,6 +70,8 @@ class MockAiInterviewClient implements AiInterviewClient {
         // Keep the mock deterministic. Its length check does not evaluate the substance of a statement.
         int minimumLength = answer.field() == InterviewField.AI_TOOL ? 2 : 8;
         var status = text.codePointCount(0, text.length()) >= minimumLength ? COMPLETED : NEEDS_REVIEW;
+        // Keep the field open for one supplementary question when the answer leaves out what the report needs.
+        if (status == COMPLETED && InterviewSupplement.next(answer.field(), answers).isPresent()) status = NEEDS_REVIEW;
         return new InterviewFieldState(answer.field(), status, text);
     }
 }
