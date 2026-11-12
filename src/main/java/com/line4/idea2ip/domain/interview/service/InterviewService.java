@@ -182,9 +182,9 @@ public class InterviewService {
         if (evaluation == null || evaluation.field() != plan.answer().field() || evaluation.status() == null) {
             throw new BaseException(INTERVIEW_AI_UNAVAILABLE);
         }
-        var fields = plan.fields().stream()
-                .map(field -> field.field() == evaluation.field() ? evaluation : field)
-                .toList();
+        var answersForField = plan.context().answers().stream()
+                .filter(answer -> answer.field() == evaluation.field()).map(Answer::content).toList();
+        var fields = InterviewProgress.apply(plan.fields(), evaluation, answersForField);
         InterviewField target = nextField(fields);
         QuestionDraft question = target == null ? null : generateQuestion(plan.context(), target);
 

@@ -258,6 +258,8 @@ public class ContributionService {
         }
         for (var source : input.sources()) {
             if (source.messageId() == null || !"ai_usage".equals(source.targetField())) continue;
+            // "없습니다" means no AI work; it must not appear as a tool, purpose or output.
+            if (InterviewFieldState.isNotApplicableAnswer(source.content())) continue;
             var proposal = proposal(results, sources, source, decided);
             if (source.locator().endsWith("(AI_TOOL)")) proposal.tools.add(source.content());
             if (source.locator().endsWith("(AI_PURPOSE)")) proposal.purposes.add(source.content());
