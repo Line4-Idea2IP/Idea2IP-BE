@@ -34,23 +34,32 @@ public final class ReportModels {
 
         public String title() { return title; }
 
+        /** Every section can be edited by the user (spec: overview, AI, human work, references, gaps). */
         public boolean editable() {
-            return this == WORK_OVERVIEW || this == AI_USAGE || this == HUMAN_CONTRIBUTION;
+            return true;
         }
     }
 
     public record SectionEdit(@NotNull SectionKey sectionKey,
                               @NotEmpty @Size(max = 100) List<@NotBlank @Size(max = 8000) String> paragraphs) {}
     public record VersionReq(@NotNull UUID requestId, @NotNull Operation operation, @Positive Long baseVersionId,
-                             @Size(max = 3) List<@NotNull @Valid SectionEdit> editedSections, Boolean retry) {
+                             @Size(max = 5) List<@NotNull @Valid SectionEdit> editedSections, Boolean retry) {
         public boolean retryRequested() { return Boolean.TRUE.equals(retry); }
 
         public List<SectionEdit> edits() { return editedSections == null ? List.of() : editedSections; }
     }
 
     public record Check(String code, CheckStatus status, String message) {}
+    /** sections/summary: per-field writing state shown before generation; it never blocks generation. */
     public record Readiness(boolean canGenerate, List<Check> checks, List<Check> blockingReasons,
-                            List<Check> warnings, long inputRevision) {}
+                            List<Check> warnings, long inputRevision, List<ReadinessSection> sections,
+                            ReadinessSummary summary) {}
+    public enum FieldState { WRITTEN, NOT_APPLICABLE, UNVERIFIED }
+    public record ReadinessField(String key, String label, FieldState state) {}
+    /** written: no unverified field remains; writtenCount counts WRITTEN fields only. */
+    public record ReadinessSection(String sectionKey, String title, boolean written, int writtenCount, int totalCount,
+                                   List<ReadinessField> fields) {}
+    public record ReadinessSummary(int written, int notApplicable, int unverified, int total) {}
     public record Summary(Long versionId, int versionNo, Operation operation, Status status, Stage stage,
                           LocalDateTime createdAt, LocalDateTime readyAt, boolean pdfAvailable) {}
     public record VersionList(List<Summary> versions, Integer nextBeforeVersionNo) {}
@@ -64,7 +73,14 @@ public final class ReportModels {
                          LocalDateTime readyAt, List<SectionView> sections, List<Evidence> sources, List<Flag> reviewFlags,
                          PersistentJob.Failure failure, boolean pdfAvailable, String schemaVersion,
                          String templateVersion, String mode) {}
-    public record PdfDownload(int versionNo, byte[] bytes) {}
+    public record PdfDownload(int versionNo, String projectTitle, byte[] bytes) {
+        /** Spec file name: Idea2IP_프로젝트명_CopyrightBrief_v1.pdf (spaces and characters invalid in file names removed). */
+        public String fileName() {
+            String name = projectTitle == null ? "" : projectTitle.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}\\s]+", "");
+            if (name.codePointCount(0, name.length()) > 50) name = name.substring(0, name.offsetByCodePoints(0, 50));
+            return "Idea2IP_" + (name.isEmpty() ? "project" : name) + "_CopyrightBrief_v" + versionNo + ".pdf";
+        }
+    }
 
     /** profile is null in snapshots stored before it existed. */
     public record InputSnapshot(Input aiInput, List<Confirmed> contributions, String noContributionReason,

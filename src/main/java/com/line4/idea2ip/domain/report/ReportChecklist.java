@@ -2,6 +2,9 @@ package com.line4.idea2ip.domain.report;
 
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.contribution.ContributionModels.Confirmed;
+import com.line4.idea2ip.domain.interview.entity.InterviewField;
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
+import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
@@ -25,6 +28,7 @@ class ReportChecklist {
 
     private final CreativeMaterialRepository materials;
     private final FinalArtworkRepository artworks;
+    private final AiInterviewRepository interviews;
 
     record MaterialInfo(String title, MaterialType type, boolean hasFiles, String description, LocalDate productionDate) {}
 
@@ -35,11 +39,22 @@ class ReportChecklist {
                         !material.getFiles().isEmpty(), material.getDescription(), material.getProductionDate()))
                 .toList();
         var artwork = artworks.findByProject_ProjectId(projectId).orElse(null);
-        return items(info, artwork != null, artwork == null ? null : artwork.getDescription(), confirmed, unresolvedFields);
+        var needsReview = interviews.findByProject_ProjectId(projectId).map(interview -> interview.getFieldStates().stream()
+                .filter(state -> state.status() == InterviewFieldState.Status.NEEDS_REVIEW)
+                .map(InterviewFieldState::field).toList()).orElse(List.of());
+        return items(info, artwork != null, artwork == null ? null : artwork.getDescription(), confirmed, unresolvedFields,
+                needsReview);
     }
 
     static List<String> items(List<MaterialInfo> materials, boolean hasArtwork, String artworkDescription,
                               List<Confirmed> confirmed, List<String> unresolvedFields) {
+        return items(materials, hasArtwork, artworkDescription, confirmed, unresolvedFields, List.of());
+    }
+
+    /** @param needsReviewFields interview fields still marked NEEDS_REVIEW (e.g. unclear after the answer limit) */
+    static List<String> items(List<MaterialInfo> materials, boolean hasArtwork, String artworkDescription,
+                              List<Confirmed> confirmed, List<String> unresolvedFields,
+                              List<InterviewField> needsReviewFields) {
         List<String> items = new ArrayList<>();
         missingType(items, materials, MaterialType.INITIAL_SKETCH,
                 "초기 스케치나 수정 전 시안 자료가 없습니다. 직접 작업의 출발점을 보여줄 자료가 있다면 첨부해 주세요.");
@@ -72,7 +87,20 @@ class ReportChecklist {
         if (unresolvedFields.contains("human_edit")) {
             items.add("직접 수정·추가한 부분에 관한 답변이 모호하거나 확인되지 않았습니다. 작업한 요소와 방법을 기여 검토에서 확인해 주세요.");
         }
+        for (var field : needsReviewFields) {
+            items.add("인터뷰의 '" + label(field) + "' 답변이 아직 구체적이지 않습니다. 기여 검토에서 해당 내용을 보완해 주세요.");
+        }
         return items.isEmpty() ? List.of(NOTHING_MISSING) : List.copyOf(items);
+    }
+
+    static String label(InterviewField field) {
+        return switch (field) {
+            case AI_TOOL -> "사용한 AI 도구";
+            case AI_PURPOSE -> "AI 활용 목적";
+            case AI_OUTPUT_USAGE -> "AI 결과 활용";
+            case HUMAN_CREATED_ELEMENT -> "직접 창작한 부분";
+            case HUMAN_EDITED_EXPRESSION -> "직접 수정한 부분";
+        };
     }
 
     private static void missingType(List<String> items, List<MaterialInfo> materials, MaterialType type, String message) {

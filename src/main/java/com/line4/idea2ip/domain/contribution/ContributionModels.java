@@ -6,6 +6,8 @@ import com.line4.idea2ip.integration.ai.BriefAiClient.Evidence;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -56,7 +58,12 @@ public final class ContributionModels {
     }
 
     public record GenerationView(Long generationId, UUID requestId, PersistentJob.Status status, PersistentJob.Failure failure) {}
-    public record Summary(Long stepId, int order, Kind kind, String title, StepStatus reviewStatus) {}
+    /**
+     * productionDate: date the user entered for the material (null when not given or not a material).
+     * recordedAt: when the server stored the material, artwork or interview answer. Kept apart per the spec.
+     */
+    public record Summary(Long stepId, int order, Kind kind, String title, StepStatus reviewStatus,
+                          LocalDate productionDate, LocalDateTime recordedAt) {}
     public record View(ReviewStatus reviewStatus, long revision, List<Summary> timeline,
                        List<String> unresolvedFields, GenerationView latestGeneration) {}
     public record FileRef(Long fileId, String originalFileName, String fileUrl) {}
@@ -64,6 +71,7 @@ public final class ContributionModels {
     public record ArtworkRef(Long artworkId, String title, String fileUrl) {}
     public record Detail(Long stepId, int order, Kind kind, String title, StepStatus reviewStatus,
                          List<MaterialRef> materialRefs, ArtworkRef finalArtworkRef, AiUsage aiUsage,
-                         List<String> humanCreatedElements, List<String> humanEdits, List<Evidence> sources) {}
+                         List<String> humanCreatedElements, List<String> humanEdits, List<Evidence> sources,
+                         LocalDate productionDate, LocalDateTime recordedAt) {}
     public record Confirmed(String title, Content content, List<Evidence> sources) {}
 }

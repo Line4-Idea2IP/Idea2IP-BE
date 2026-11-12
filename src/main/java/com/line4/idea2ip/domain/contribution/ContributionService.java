@@ -4,7 +4,9 @@ import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.contribution.ContributionModels.*;
 import com.line4.idea2ip.domain.interview.entity.AiInterview;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
+import com.line4.idea2ip.domain.interview.entity.InterviewMessage;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
+import com.line4.idea2ip.domain.interview.repository.InterviewMessageRepository;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
 import com.line4.idea2ip.domain.project.entity.Project;
 import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Operation;
@@ -35,6 +37,7 @@ public class ContributionService {
     private final ProjectRepository projectRepository;
     private final ProjectInputChanges changes;
     private final AiInterviewRepository interviews;
+    private final InterviewMessageRepository messages;
     private final CreativeMaterialRepository materials;
     private final FinalArtworkRepository artworks;
     private final ContributionReviewRepository reviews;
@@ -297,7 +300,8 @@ public class ContributionService {
 
     private View view(Long projectId, ContributionReview review) {
         var timeline = timeline(projectId, review).stream()
-                .map(item -> new Summary(item.stepId(), item.order(), item.kind(), item.title(), item.reviewStatus())).toList();
+                .map(item -> new Summary(item.stepId(), item.order(), item.kind(), item.title(), item.reviewStatus(),
+                        item.productionDate(), item.recordedAt())).toList();
         if (review == null) return new View(ReviewStatus.NOT_STARTED, 0, timeline, List.of(), null);
         var latest = generations.findFirstByReview_IdOrderByUpdateAtDescIdDesc(review.getId()).map(this::toView).orElse(null);
         return new View(review.getStatus(), review.getRevision(), timeline, review.getUnresolvedFields(), latest);
@@ -312,32 +316,37 @@ public class ContributionService {
                     "/api/materials/" + material.getMaterialId() + "/files/" + file.getFileId())).toList();
             var refs = List.of(new MaterialRef(material.getMaterialId(), material.getTitle(), files));
             var ai = StringUtils.hasText(material.getUsedAi()) ? new AiUsage(List.of(material.getUsedAi()), null, null) : null;
-            list.add(detail(list.size() + 1, Kind.MATERIAL, material.getMaterialId(), material.getTitle(), step, refs, null, ai));
+            list.add(detail(list.size() + 1, Kind.MATERIAL, material.getMaterialId(), material.getTitle(), step, refs, null, ai,
+                    material.getProductionDate(), material.getCreatedAt()));
         }
         var artwork = artworks.findByProject_ProjectId(projectId).orElse(null);
         for (var step : entries) {
             if (artwork != null && step.getKind() == Kind.FINAL_ARTWORK && step.getResourceId().equals(artwork.getArtworkId())) continue;
             if (list.stream().noneMatch(item -> item.stepId().equals(publicId(step)))
                     && (step.getStatus() != StepStatus.UNREVIEWED || step.getContent().hasContribution())) {
-                list.add(detail(list.size() + 1, step.getKind(), step.getResourceId(), step.getTitle(), step, List.of(), null, null));
+                var recordedAt = step.getKind() == Kind.INTERVIEW_STATEMENT
+                        ? messages.findById(step.getResourceId()).map(InterviewMessage::getCreatedAt).orElse(null) : null;
+                list.add(detail(list.size() + 1, step.getKind(), step.getResourceId(), step.getTitle(), step, List.of(), null, null,
+                        null, recordedAt));
             }
         }
         if (artwork != null) {
             var ref = new ArtworkRef(artwork.getArtworkId(), artwork.getTitle(), artwork.getImagePath() == null ? null
                     : "/api/projects/" + projectId + "/artwork/image");
             list.add(detail(list.size() + 1, Kind.FINAL_ARTWORK, artwork.getArtworkId(), artwork.getTitle(),
-                    match(entries, Kind.FINAL_ARTWORK, artwork.getArtworkId()), List.of(), ref, null));
+                    match(entries, Kind.FINAL_ARTWORK, artwork.getArtworkId()), List.of(), ref, null, null, artwork.getCreatedAt()));
         }
         return List.copyOf(list);
     }
 
     private Detail detail(int order, Kind kind, Long resourceId, String title, ContributionStep step,
-                          List<MaterialRef> refs, ArtworkRef artwork, AiUsage defaultAi) {
+                          List<MaterialRef> refs, ArtworkRef artwork, AiUsage defaultAi,
+                          java.time.LocalDate productionDate, java.time.LocalDateTime recordedAt) {
         var content = step == null ? Content.empty() : step.getContent();
         return new Detail(step == null ? linkedId(kind, resourceId) : publicId(step), order, kind, title,
                 step == null ? StepStatus.UNREVIEWED : step.getStatus(), refs, artwork,
                 content.aiUsage() == null ? defaultAi : content.aiUsage(), content.humanCreatedElements(),
-                content.humanEdits(), step == null ? List.of() : step.evidence());
+                content.humanEdits(), step == null ? List.of() : step.evidence(), productionDate, recordedAt);
     }
 
     private ContributionStep match(List<ContributionStep> entries, Kind kind, Long resourceId) {
