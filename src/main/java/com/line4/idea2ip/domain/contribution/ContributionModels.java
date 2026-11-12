@@ -60,7 +60,8 @@ public final class ContributionModels {
     public record GenerationView(Long generationId, UUID requestId, PersistentJob.Status status, PersistentJob.Failure failure) {}
     /**
      * productionDate: date the user entered for the material (null when not given or not a material).
-     * recordedAt: when the server stored the material, artwork or interview answer. Kept apart per the spec.
+     * recordedAt: server time — latest file upload for a material, current image upload for the artwork, answer
+     *             time for an interview statement. Files stored before upload times existed fall back to registration.
      */
     public record Summary(Long stepId, int order, Kind kind, String title, StepStatus reviewStatus,
                           LocalDate productionDate, LocalDateTime recordedAt) {}

@@ -61,6 +61,36 @@ class ReportContentAssemblerTests {
         assertEquals(List.of("material:5", "answer:2"), result.sections().get(2).sourceIds());
     }
 
+    @Test void editedGapsShowTheNewChecklistAndKeepTheEditForReview() {
+        var before = new InputSnapshot(ai, List.of(), null, List.of("제작일이 없는 자료가 있습니다."), null);
+        var base = assembler.edit(assembler.assemble(before, draft, null, null),
+                List.of(new SectionEdit(SectionKey.GAPS_AND_GUIDANCE, List.of("사용자가 고친 보완 문장"))));
+
+        var unchanged = assembler.assemble(before, draft, base, before);
+        assertEquals(List.of("사용자가 고친 보완 문장"), unchanged.sections().get(4).paragraphs());
+        assertTrue(unchanged.reviewFlags().isEmpty());
+
+        // The production date was filled in: the checklist changed although no cited source did.
+        var after = new InputSnapshot(ai, List.of(), null, List.of(ReportChecklist.NOTHING_MISSING), null);
+        var updated = assembler.assemble(after, draft, base, before);
+        assertEquals(List.of(ReportChecklist.NOTHING_MISSING, ReportContentAssembler.NO_OFFICIAL_GUIDE),
+                updated.sections().get(4).paragraphs());
+        assertEquals(List.of("사용자가 고친 보완 문장"), updated.reviewFlags().getFirst().retainedUserParagraphs());
+    }
+
+    @Test void editedReferencesRefreshWhenMaterialsChange() {
+        var profile = new Profile(null, null, null, null, List.of(
+                new MaterialFact(5L, "AI_ASSISTED", "구도 자료", null, null, null, 1, 1)));
+        var before = new InputSnapshot(ai, List.of(), null, List.of(), profile);
+        var base = assembler.edit(assembler.assemble(before, draft, null, null),
+                List.of(new SectionEdit(SectionKey.EVIDENCE_SUMMARY, List.of("사용자가 고친 참고자료"))));
+        var dated = new Profile(null, null, null, null, List.of(
+                new MaterialFact(5L, "AI_ASSISTED", "구도 자료", null, null, "2026-11-01", 1, 1)));
+        var updated = assembler.assemble(new InputSnapshot(ai, List.of(), null, List.of(), dated), draft, base, before);
+        assertTrue(updated.sections().get(3).paragraphs().getFirst().contains("제작일: 2026-11-01"));
+        assertEquals(List.of("사용자가 고친 참고자료"), updated.reviewFlags().getFirst().retainedUserParagraphs());
+    }
+
     @Test void noContributionReasonSupersedesPriorEditedContribution() {
         var before = new InputSnapshot(ai, List.of(), "기여 미확인", List.of(), null);
         var base = assembler.assemble(before, draft, null, null);

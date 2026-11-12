@@ -28,7 +28,7 @@ final class ReportReadinessSections {
                   Set<MaterialType> materialTypesWithFiles) {}
 
     static List<ReadinessSection> sections(Inputs in) {
-        boolean noAi = in.interview().get(InterviewField.AI_TOOL) == Status.NOT_APPLICABLE;
+        boolean noAi = noAiUse(in.interview(), in.confirmed());
         boolean noHumanWork = in.noContributionReason() != null && in.confirmed().stream().allMatch(step ->
                 step.content().humanCreatedElements().isEmpty() && step.content().humanEdits().isEmpty());
 
@@ -55,6 +55,15 @@ final class ReportReadinessSections {
                 materialField(in, "manualEdit", "직접 수정 자료", MaterialType.MANUAL_EDIT, false));
         return List.of(section(SectionKey.WORK_OVERVIEW, overview), section(SectionKey.AI_USAGE, ai),
                 section(SectionKey.HUMAN_CONTRIBUTION, human), section(SectionKey.EVIDENCE_SUMMARY, references));
+    }
+
+    /**
+     * The project did not use AI: the interview says so and no confirmed contribution records AI use. Shared by the
+     * readiness response and the report checklist so both judge AI materials the same way.
+     */
+    static boolean noAiUse(Map<InterviewField, Status> interview, List<Confirmed> confirmed) {
+        return interview.get(InterviewField.AI_TOOL) == Status.NOT_APPLICABLE
+                && confirmed.stream().noneMatch(step -> step.content().aiUsage() != null);
     }
 
     static ReadinessSummary summary(List<ReadinessSection> sections) {

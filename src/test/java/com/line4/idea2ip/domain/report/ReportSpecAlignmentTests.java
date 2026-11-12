@@ -25,9 +25,26 @@ class ReportSpecAlignmentTests {
         assertEquals("Idea2IP_project_CopyrightBrief_v2.pdf", new PdfDownload(2, "  ", new byte[0]).fileName());
     }
 
+    @Test void noAiProjectsAreNotAskedForAiMaterials() {
+        var noAiInterview = java.util.Map.of(InterviewField.AI_TOOL,
+                com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Status.NOT_APPLICABLE);
+        assertTrue(ReportReadinessSections.noAiUse(noAiInterview, List.of()));
+        var aiStep = new com.line4.idea2ip.domain.contribution.ContributionModels.Confirmed("자료",
+                new com.line4.idea2ip.domain.contribution.ContributionModels.Content(
+                        new com.line4.idea2ip.domain.contribution.ContributionModels.AiUsage(List.of("도구"), null, null),
+                        List.of(), List.of()), List.of());
+        // A confirmed AI record outweighs a "없음" answer, as in the readiness response.
+        assertFalse(ReportReadinessSections.noAiUse(noAiInterview, List.of(aiStep)));
+
+        var withoutAi = ReportChecklist.items(List.of(), true, "완성작", List.of(), List.of(), List.of(), true);
+        assertTrue(withoutAi.stream().noneMatch(item -> item.startsWith("AI로 만든")));
+        var withAi = ReportChecklist.items(List.of(), true, "완성작", List.of(), List.of(), List.of(), false);
+        assertTrue(withAi.stream().anyMatch(item -> item.startsWith("AI로 만든")));
+    }
+
     @Test void unclearInterviewFieldsBecomeGapItems() {
         var items = ReportChecklist.items(List.of(), true, "완성작", List.of(), List.of(),
-                List.of(InterviewField.HUMAN_EDITED_EXPRESSION));
+                List.of(InterviewField.HUMAN_EDITED_EXPRESSION), false);
         assertTrue(items.contains("인터뷰의 '직접 수정한 부분' 답변이 아직 구체적이지 않습니다. 기여 검토에서 해당 내용을 보완해 주세요."));
     }
 }

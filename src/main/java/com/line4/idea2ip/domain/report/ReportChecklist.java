@@ -39,27 +39,35 @@ class ReportChecklist {
                         !material.getFiles().isEmpty(), material.getDescription(), material.getProductionDate()))
                 .toList();
         var artwork = artworks.findByProject_ProjectId(projectId).orElse(null);
-        var needsReview = interviews.findByProject_ProjectId(projectId).map(interview -> interview.getFieldStates().stream()
-                .filter(state -> state.status() == InterviewFieldState.Status.NEEDS_REVIEW)
-                .map(InterviewFieldState::field).toList()).orElse(List.of());
+        var states = interviews.findByProject_ProjectId(projectId).map(interview -> interview.getFieldStates())
+                .orElse(List.of());
+        var needsReview = states.stream().filter(state -> state.status() == InterviewFieldState.Status.NEEDS_REVIEW)
+                .map(InterviewFieldState::field).toList();
+        var interviewStatus = new java.util.EnumMap<InterviewField, InterviewFieldState.Status>(InterviewField.class);
+        states.forEach(state -> interviewStatus.put(state.field(), state.status()));
         return items(info, artwork != null, artwork == null ? null : artwork.getDescription(), confirmed, unresolvedFields,
-                needsReview);
+                needsReview, ReportReadinessSections.noAiUse(interviewStatus, confirmed));
     }
 
     static List<String> items(List<MaterialInfo> materials, boolean hasArtwork, String artworkDescription,
                               List<Confirmed> confirmed, List<String> unresolvedFields) {
-        return items(materials, hasArtwork, artworkDescription, confirmed, unresolvedFields, List.of());
+        return items(materials, hasArtwork, artworkDescription, confirmed, unresolvedFields, List.of(), false);
     }
 
-    /** @param needsReviewFields interview fields still marked NEEDS_REVIEW (e.g. unclear after the answer limit) */
+    /**
+     * @param needsReviewFields interview fields still marked NEEDS_REVIEW (e.g. unclear after the answer limit)
+     * @param noAi              no AI was used ({@link ReportReadinessSections#noAiUse}); AI materials are not asked for
+     */
     static List<String> items(List<MaterialInfo> materials, boolean hasArtwork, String artworkDescription,
                               List<Confirmed> confirmed, List<String> unresolvedFields,
-                              List<InterviewField> needsReviewFields) {
+                              List<InterviewField> needsReviewFields, boolean noAi) {
         List<String> items = new ArrayList<>();
         missingType(items, materials, MaterialType.INITIAL_SKETCH,
                 "초기 스케치나 수정 전 시안 자료가 없습니다. 직접 작업의 출발점을 보여줄 자료가 있다면 첨부해 주세요.");
-        missingType(items, materials, MaterialType.AI_ASSISTED,
-                "AI로 만든 시안이나 결과물 자료가 없습니다. AI를 사용했다면 해당 산출물을 첨부해 주세요.");
+        if (!noAi) {
+            missingType(items, materials, MaterialType.AI_ASSISTED,
+                    "AI로 만든 시안이나 결과물 자료가 없습니다. AI를 사용했다면 해당 산출물을 첨부해 주세요.");
+        }
         missingType(items, materials, MaterialType.MANUAL_EDIT,
                 "직접 수정 과정을 보여줄 자료가 없습니다. 수정 전후를 비교할 수 있는 중간 수정본을 첨부해 주세요.");
         listed(items, materials, material -> !material.hasFiles(), "첨부 파일이 없는 자료",

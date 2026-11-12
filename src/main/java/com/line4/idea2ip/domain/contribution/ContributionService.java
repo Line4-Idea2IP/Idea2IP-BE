@@ -317,7 +317,7 @@ public class ContributionService {
             var refs = List.of(new MaterialRef(material.getMaterialId(), material.getTitle(), files));
             var ai = StringUtils.hasText(material.getUsedAi()) ? new AiUsage(List.of(material.getUsedAi()), null, null) : null;
             list.add(detail(list.size() + 1, Kind.MATERIAL, material.getMaterialId(), material.getTitle(), step, refs, null, ai,
-                    material.getProductionDate(), material.getCreatedAt()));
+                    material.getProductionDate(), uploadedAt(material)));
         }
         var artwork = artworks.findByProject_ProjectId(projectId).orElse(null);
         for (var step : entries) {
@@ -334,7 +334,8 @@ public class ContributionService {
             var ref = new ArtworkRef(artwork.getArtworkId(), artwork.getTitle(), artwork.getImagePath() == null ? null
                     : "/api/projects/" + projectId + "/artwork/image");
             list.add(detail(list.size() + 1, Kind.FINAL_ARTWORK, artwork.getArtworkId(), artwork.getTitle(),
-                    match(entries, Kind.FINAL_ARTWORK, artwork.getArtworkId()), List.of(), ref, null, null, artwork.getCreatedAt()));
+                    match(entries, Kind.FINAL_ARTWORK, artwork.getArtworkId()), List.of(), ref, null, null,
+                    artwork.getImageUploadedAt() != null ? artwork.getImageUploadedAt() : artwork.getCreatedAt()));
         }
         return List.copyOf(list);
     }
@@ -347,6 +348,12 @@ public class ContributionService {
                 step == null ? StepStatus.UNREVIEWED : step.getStatus(), refs, artwork,
                 content.aiUsage() == null ? defaultAi : content.aiUsage(), content.humanCreatedElements(),
                 content.humanEdits(), step == null ? List.of() : step.evidence(), productionDate, recordedAt);
+    }
+
+    /** Latest file upload of a material; falls back to its registration time for files stored before uploadedAt. */
+    static java.time.LocalDateTime uploadedAt(com.line4.idea2ip.domain.material.entity.CreativeMaterial material) {
+        return material.getFiles().stream().map(com.line4.idea2ip.domain.material.entity.CreativeMaterialFile::getUploadedAt)
+                .filter(Objects::nonNull).max(java.time.LocalDateTime::compareTo).orElse(material.getCreatedAt());
     }
 
     private ContributionStep match(List<ContributionStep> entries, Kind kind, Long resourceId) {

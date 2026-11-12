@@ -131,9 +131,9 @@ class ReportContentAssembler {
                 var carriedFlag = base.reviewFlags().stream()
                         .filter(flag -> flag.sectionKey().equals(previous.sectionKey())).findFirst().orElse(null);
                 var retained = carriedFlag == null ? List.<String>of() : carriedFlag.retainedUserParagraphs();
-                if (previous.sectionKey().equals(SectionKey.HUMAN_CONTRIBUTION.name())
-                        && (!baseInput.contributions().equals(input.contributions())
-                        || !Objects.equals(baseInput.noContributionReason(), input.noContributionReason()))) {
+                // When what a section is built from changed, show the new generated content and keep the user's
+                // edit beside it for review, instead of letting the old edit hide the update.
+                if (derivedInputsChanged(previous.sectionKey(), baseInput, input)) {
                     retained = retained.isEmpty() ? previous.paragraphs() : retained;
                 }
                 if (carriedFlag != null || evidenceChanged(previous, generated, base, baseInput, input, sources)) {
@@ -269,12 +269,28 @@ class ReportContentAssembler {
                 base.reviewFlags().stream().filter(flag -> !byKey.containsKey(flag.sectionKey())).toList());
     }
 
+    /**
+     * Inputs a section is generated from beyond its cited sources: confirmed contributions for human work,
+     * stored materials and contributions for the reference list, and the rule-based checklist for gaps. A changed
+     * production date, for example, alters the checklist without touching any cited source.
+     */
+    private static boolean derivedInputsChanged(String sectionKey, InputSnapshot baseInput, InputSnapshot input) {
+        if (baseInput == null) return false;
+        boolean contributionsChanged = !baseInput.contributions().equals(input.contributions())
+                || !Objects.equals(baseInput.noContributionReason(), input.noContributionReason());
+        return switch (SectionKey.valueOf(sectionKey)) {
+            case HUMAN_CONTRIBUTION -> contributionsChanged;
+            case EVIDENCE_SUMMARY -> contributionsChanged || !Objects.equals(baseInput.profile(), input.profile())
+                    || !baseInput.aiInput().sources().equals(input.aiInput().sources());
+            case GAPS_AND_GUIDANCE -> !Objects.equals(baseInput.warnings(), input.warnings());
+            case WORK_OVERVIEW, AI_USAGE -> false;
+        };
+    }
+
     private boolean evidenceChanged(Section previous, Section generated, Content base, InputSnapshot baseInput,
                                     InputSnapshot input, Map<String, Evidence> current) {
         if (generated == null || !Set.copyOf(previous.sourceIds()).equals(Set.copyOf(generated.sourceIds()))) return true;
-        if (previous.sectionKey().equals(SectionKey.HUMAN_CONTRIBUTION.name())
-                && (!baseInput.contributions().equals(input.contributions())
-                        || !Objects.equals(baseInput.noContributionReason(), input.noContributionReason()))) return true;
+        if (derivedInputsChanged(previous.sectionKey(), baseInput, input)) return true;
         var oldSources = base.sources().stream().filter(source -> previous.sourceIds().contains(source.sourceId())).toList();
         if (oldSources.stream().anyMatch(source -> !source.equals(current.get(source.sourceId())))) return true;
         var priorInput = baseInput.aiInput().sources().stream()

@@ -5,6 +5,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "creative_material_files")
 @Getter
@@ -28,10 +30,14 @@ public class CreativeMaterialFile {
     @Column(nullable = false, length = 100)
     private String fileType;
 
+    /** When the server received this file; null for files uploaded before the column existed. */
+    private LocalDateTime uploadedAt;
+
     CreativeMaterialFile(CreativeMaterial material, String originalFileName, String storageKey, String fileType) {
         this.material = material;
         this.originalFileName = originalFileName;
         this.storageKey = storageKey;
         this.fileType = fileType;
+        this.uploadedAt = LocalDateTime.now();
     }
 }
