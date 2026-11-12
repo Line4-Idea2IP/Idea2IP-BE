@@ -55,6 +55,12 @@ class ContributionProposalTests {
         assertTrue(proposals(input(source), List.of()).isEmpty());
     }
 
+    @Test void noAiAnswersAreNotProposedAsAiUsage() {
+        var tool = answer(1, "AI_TOOL", "ai_usage", "없습니다.");
+        var purpose = answer(2, "AI_PURPOSE", "ai_usage", "없음");
+        assertTrue(proposals(input(tool, purpose), List.of()).isEmpty());
+    }
+
     @Test void reviewedAnswerStaysOnItsDecidedStepWhenMaterialLinkChanges() {
         // The user excluded this edit while it was linked to material 5; a regenerated input links it to material 6.
         var oldStep = new ContributionStep(null, Kind.MATERIAL, 5L, "구도 참고 자료");

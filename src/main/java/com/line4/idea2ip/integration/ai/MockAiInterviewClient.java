@@ -52,9 +52,8 @@ class MockAiInterviewClient implements AiInterviewClient {
     public InterviewFieldState analyzeAnswer(Context context, Answer answer) {
         String text = answer.content();
         if (InterviewFieldState.isNotApplicableAnswer(text)) {
-            boolean allowed = answer.field() == InterviewField.HUMAN_CREATED_ELEMENT
-                    || answer.field() == InterviewField.HUMAN_EDITED_EXPRESSION;
-            return new InterviewFieldState(answer.field(), allowed ? NOT_APPLICABLE : NEEDS_REVIEW, text);
+            // AI materials are optional, so "없음" is a valid answer for AI fields as well as human work.
+            return new InterviewFieldState(answer.field(), NOT_APPLICABLE, text);
         }
 
         // Keep the mock deterministic. Its length check does not evaluate the substance of a statement.
