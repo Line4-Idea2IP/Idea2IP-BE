@@ -21,11 +21,12 @@ public final class ReportModels {
     public enum CheckStatus { READY, BLOCKED, WARNING }
 
     public enum SectionKey {
-        WORK_OVERVIEW("작품 개요"),
-        AI_USAGE("AI 활용"),
-        HUMAN_CONTRIBUTION("사용자가 확인한 창작 기여"),
-        EVIDENCE_SUMMARY("근거 목록"),
-        GAPS_AND_GUIDANCE("보완 사항·공식 지침");
+        // Titles match the report screen's five items.
+        WORK_OVERVIEW("신청할 저작물 전체 개요"),
+        AI_USAGE("활용된 생성형 AI 산출물"),
+        HUMAN_CONTRIBUTION("인간의 창작적 표현 부분 (사용자 확인)"),
+        EVIDENCE_SUMMARY("창작 과정 참고자료"),
+        GAPS_AND_GUIDANCE("추가 확인 및 보완사항");
 
         private final String title;
 
@@ -65,8 +66,16 @@ public final class ReportModels {
                          String templateVersion, String mode) {}
     public record PdfDownload(int versionNo, byte[] bytes) {}
 
+    /** profile is null in snapshots stored before it existed. */
     public record InputSnapshot(Input aiInput, List<Confirmed> contributions, String noContributionReason,
-                                List<String> warnings) {}
+                                List<String> warnings, Profile profile) {}
+
+    /** Project facts printed in the report as stored, never sent to the AI service. Dates are ISO strings. */
+    public record Profile(String artworkType, String projectDescription, String artworkTitle, String artworkDescription,
+                          List<MaterialFact> materials) {}
+
+    public record MaterialFact(Long materialId, String type, String title, String description, String usedAi,
+                               String productionDate, int fileCount, int order) {}
 
     public record Content(String schemaVersion, String mode, List<Section> sections, List<Evidence> sources,
                           List<String> editedSectionKeys, List<Flag> reviewFlags) {}

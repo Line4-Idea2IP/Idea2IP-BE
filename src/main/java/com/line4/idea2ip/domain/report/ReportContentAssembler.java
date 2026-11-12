@@ -1,5 +1,6 @@
 package com.line4.idea2ip.domain.report;
 
+import com.line4.idea2ip.domain.contribution.ContributionModels.Confirmed;
 import com.line4.idea2ip.domain.report.ReportModels.*;
 import com.line4.idea2ip.integration.ai.BriefAiClient.*;
 import org.springframework.stereotype.Component;
@@ -18,22 +19,39 @@ class ReportContentAssembler {
 
         Map<String, Section> byKey = new LinkedHashMap<>();
         draft.sections().forEach(section -> byKey.put(section.sectionKey(), section));
+        var profile = input.profile();
+        Map<Long, MaterialFact> facts = new HashMap<>();
+        if (profile != null && profile.materials() != null) profile.materials().forEach(fact -> facts.put(fact.materialId(), fact));
         List<String> human = new ArrayList<>();
         List<String> confirmedAi = new ArrayList<>();
         Set<String> aiSourceIds = new LinkedHashSet<>();
         Set<String> humanSourceIds = new LinkedHashSet<>();
         for (var step : input.contributions()) {
-            human.addAll(step.content().humanCreatedElements().stream().map(text -> step.title() + " · 직접 창작: " + text).toList());
-            human.addAll(step.content().humanEdits().stream().map(text -> step.title() + " · 직접 수정: " + text).toList());
+            var fact = materialOf(step, facts);
+            String header = stepHeader(step, fact);
+            var humanLines = new ArrayList<String>();
+            step.content().humanCreatedElements().forEach(text -> humanLines.add("직접 창작: " + text));
+            step.content().humanEdits().forEach(text -> humanLines.add("직접 수정: " + text));
+            if (!humanLines.isEmpty()) human.add(paragraph(header, humanLines));
             var usage = step.content().aiUsage();
             if (usage != null) {
                 var aiTexts = new ArrayList<String>();
-                if (usage.tools() != null) aiTexts.addAll(usage.tools());
-                if (usage.purpose() != null) aiTexts.add(usage.purpose());
+                var aiLines = new ArrayList<String>();
+                if (usage.tools() != null && !usage.tools().isEmpty()) {
+                    aiTexts.addAll(usage.tools());
+                    aiLines.add("도구: " + String.join(", ", usage.tools()));
+                }
+                // The material description is the user's own account of what the AI produced.
+                if (fact != null && hasText(fact.description()) && "AI_ASSISTED".equals(fact.type())) {
+                    aiLines.add("산출물 설명: " + excerpt(fact.description(), 300));
+                }
+                if (usage.purpose() != null) {
+                    aiTexts.add(usage.purpose());
+                    aiLines.add("사용 목적: " + usage.purpose());
+                }
                 if (usage.outputUsage() != null) aiTexts.add(usage.outputUsage());
-                if (usage.tools() != null) confirmedAi.addAll(usage.tools().stream().map(tool -> "도구: " + tool).toList());
-                if (usage.purpose() != null) confirmedAi.add("목적: " + usage.purpose());
-                if (usage.outputUsage() != null) confirmedAi.add("산출물 활용: " + usage.outputUsage());
+                aiLines.add("최종 작품 반영: " + (hasText(usage.outputUsage()) ? usage.outputUsage() : "미확인"));
+                confirmedAi.add(paragraph(header, aiLines));
                 aiSourceIds.addAll(relevantSourceIds(step.sources(), aiTexts));
             }
             var humanTexts = new ArrayList<>(step.content().humanCreatedElements());
@@ -51,10 +69,21 @@ class ReportContentAssembler {
         }
 
         var artwork = input.aiInput().sources().stream().filter(source -> source.artworkId() != null).toList();
-        if (!artwork.isEmpty()) {
-            var overview = new ArrayList<>(artwork.stream().map(Source::content).toList());
+        var aiOverview = byKey.get(SectionKey.WORK_OVERVIEW.name());
+        if (profile != null || !artwork.isEmpty()) {
+            var overview = new ArrayList<String>();
+            if (profile != null) {
+                overview.add("작품명: " + input.aiInput().title());
+                overview.add("작품 유형: " + orUnknown(SourceLabels.artworkType(profile.artworkType())));
+                overview.add("주제·기획 의도: " + orUnknown(profile.projectDescription()));
+                if (profile.artworkTitle() != null) {
+                    overview.add("최종 작품: " + profile.artworkTitle());
+                    overview.add("최종 작품 설명: " + orUnknown(profile.artworkDescription()));
+                }
+            } else {
+                overview.addAll(artwork.stream().map(Source::content).toList());
+            }
             var ids = new LinkedHashSet<>(artwork.stream().map(Source::sourceId).toList());
-            var aiOverview = byKey.get(SectionKey.WORK_OVERVIEW.name());
             if (aiOverview != null && !aiOverview.sourceIds().isEmpty()) {
                 overview.addAll(aiOverview.paragraphs());
                 ids.addAll(aiOverview.sourceIds());
@@ -62,11 +91,13 @@ class ReportContentAssembler {
             byKey.put(SectionKey.WORK_OVERVIEW.name(), section(SectionKey.WORK_OVERVIEW, overview, List.copyOf(ids)));
         }
 
-        var summary = section(SectionKey.EVIDENCE_SUMMARY, sources.values().stream()
-                .filter(source -> !"OFFICIAL_GUIDE".equals(source.kind()))
-                .map(source -> source.title()).toList(), sources.values().stream()
-                .filter(source -> !"OFFICIAL_GUIDE".equals(source.kind())).map(Evidence::sourceId).toList());
-        byKey.put(SectionKey.EVIDENCE_SUMMARY.name(), summary);
+        var evidenceIds = sources.values().stream().filter(source -> !"OFFICIAL_GUIDE".equals(source.kind()))
+                .map(Evidence::sourceId).toList();
+        var references = profile == null
+                ? sources.values().stream().filter(source -> !"OFFICIAL_GUIDE".equals(source.kind()))
+                        .map(source -> SourceLabels.kind(source.kind()) + " · " + SourceLabels.title(source)).toList()
+                : references(profile, input.contributions(), sources.values());
+        byKey.put(SectionKey.EVIDENCE_SUMMARY.name(), section(SectionKey.EVIDENCE_SUMMARY, references, evidenceIds));
 
         var guidance = byKey.get(SectionKey.GAPS_AND_GUIDANCE.name());
         // Numbered to-do items first; official guidance status is listed separately below them.
@@ -114,6 +145,84 @@ class ReportContentAssembler {
         }).toList();
         return new Content(draft.schemaVersion(), draft.mode(), sections, List.copyOf(sources.values()),
                 editedKeys, List.copyOf(flags));
+    }
+
+    private static final List<String> STAGES = List.of("INITIAL_SKETCH", "AI_ASSISTED", "MANUAL_EDIT");
+
+    /** Materials in production order (date, then stage, then the user's order), then the final artwork. */
+    private static List<String> references(Profile profile, List<Confirmed> steps, Collection<Evidence> sources) {
+        var ordered = new ArrayList<>(profile.materials() == null ? List.<MaterialFact>of() : profile.materials());
+        ordered.sort(Comparator.comparing(MaterialFact::productionDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparingInt(fact -> STAGES.indexOf(fact.type()) < 0 ? STAGES.size() : STAGES.indexOf(fact.type()))
+                .thenComparingInt(MaterialFact::order));
+        var lines = new ArrayList<String>();
+        for (var fact : ordered) {
+            var entry = new ArrayList<String>();
+            entry.add((lines.size() + 1) + ". [" + SourceLabels.materialType(fact.type()) + "] " + fact.title());
+            entry.add("제작일: " + (fact.productionDate() == null ? "미입력" : fact.productionDate())
+                    + " · 첨부 파일 " + fact.fileCount() + "개");
+            if (hasText(fact.description())) entry.add("설명: " + excerpt(fact.description(), 300));
+            if (hasText(fact.usedAi())) entry.add("사용 도구: " + fact.usedAi());
+            var work = linkedWork(fact.materialId(), steps);
+            if (!work.isEmpty()) entry.add("연결된 작업: " + String.join(", ", work));
+            lines.add(String.join("\n", entry));
+        }
+        if (profile.artworkTitle() != null) lines.add((lines.size() + 1) + ". [최종 작품] " + profile.artworkTitle());
+        long answers = sources.stream().filter(source -> "USER_STATEMENT".equals(source.kind())).count();
+        if (answers > 0) lines.add("인터뷰 답변 " + answers + "건 (사용자 진술) — 아래 출처 세부 정보 참고");
+        if (lines.isEmpty()) lines.add("등록된 창작 과정 자료가 없습니다.");
+        return lines;
+    }
+
+    private static List<String> linkedWork(Long materialId, List<Confirmed> steps) {
+        var work = new ArrayList<String>();
+        int created = 0, edited = 0;
+        boolean ai = false;
+        for (var step : steps) {
+            if (step.sources().stream().noneMatch(source -> source.sourceId().equals("material:" + materialId))) continue;
+            created += step.content().humanCreatedElements().size();
+            edited += step.content().humanEdits().size();
+            ai |= step.content().aiUsage() != null;
+        }
+        if (ai) work.add("AI 활용");
+        if (created > 0) work.add("직접 창작 " + created + "건");
+        if (edited > 0) work.add("직접 수정 " + edited + "건");
+        return work;
+    }
+
+    private static MaterialFact materialOf(Confirmed step, Map<Long, MaterialFact> facts) {
+        return step.sources().stream().map(Evidence::sourceId).filter(id -> id.matches("material:\\d+"))
+                .map(id -> facts.get(Long.valueOf(id.substring("material:".length()))))
+                .filter(Objects::nonNull).findFirst().orElse(null);
+    }
+
+    /** "구도 자료 (AI 산출물 · 2026-11-01)"; null for interview-only steps whose titles are internal. */
+    private static String stepHeader(Confirmed step, MaterialFact fact) {
+        if (SourceLabels.isInterviewTitle(step.title())) return null;
+        if (fact == null) return step.title();
+        return step.title() + " (" + SourceLabels.materialType(fact.type())
+                + (fact.productionDate() == null ? "" : " · " + fact.productionDate()) + ")";
+    }
+
+    private static String paragraph(String header, List<String> lines) {
+        var all = new ArrayList<String>();
+        if (header != null) all.add(header);
+        all.addAll(lines);
+        return String.join("\n", all);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static String orUnknown(String value) {
+        return hasText(value) ? value.strip() : "미확인";
+    }
+
+    private static String excerpt(String value, int max) {
+        String text = value.strip();
+        if (text.codePointCount(0, text.length()) <= max) return text;
+        return text.substring(0, text.offsetByCodePoints(0, max)) + "…";
     }
 
     Content edit(Content base, List<SectionEdit> edits) {

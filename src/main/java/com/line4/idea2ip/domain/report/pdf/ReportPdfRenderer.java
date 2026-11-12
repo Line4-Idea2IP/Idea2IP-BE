@@ -1,5 +1,7 @@
 package com.line4.idea2ip.domain.report.pdf;
 
+import com.line4.idea2ip.domain.report.ReportModels.SectionKey;
+import com.line4.idea2ip.domain.report.SourceLabels;
 import com.line4.idea2ip.integration.ai.BriefAiClient.Evidence;
 import com.line4.idea2ip.integration.ai.BriefAiClient.Section;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -14,15 +16,30 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
 public class ReportPdfRenderer {
-    public static final String TEMPLATE_VERSION = "1.1";
+    public static final String TEMPLATE_VERSION = "1.2";
+    static final List<String> NOTICES = List.of(
+            "이 문서는 저작권 등록 준비용 초안이며 법적 판단을 보장하지 않습니다.",
+            "창작 기여와 AI 활용 내용은 사용자 진술과 첨부 자료를 정리한 것이며, 사실 인증이나 저작권 성립 여부의 판단이 아닙니다.");
+    // Sections that state facts about the work; without sources they are marked unverified.
+    private static final Set<String> FACT_SECTIONS = Set.of("WORK_OVERVIEW", "AI_USAGE", "HUMAN_CONTRIBUTION");
+
+    /** Version facts printed under the title. */
+    public record Meta(LocalDate createdOn, Set<String> editedSectionKeys) {
+        public Meta {
+            editedSectionKeys = editedSectionKeys == null ? Set.of() : Set.copyOf(editedSectionKeys);
+        }
+    }
     private static final Path WINDOWS_FONT = Path.of("C:/Windows/Fonts/malgun.ttf");
     private final String fontPath;
 
@@ -30,11 +47,13 @@ public class ReportPdfRenderer {
         this.fontPath = fontPath;
     }
 
-    public byte[] render(String title, int version, List<Section> sections, List<Evidence> sources) throws IOException {
+    public byte[] render(String title, int version, Meta meta, List<Section> sections, List<Evidence> sources) throws IOException {
         // Sort by persisted ID so numbering is independent of response/list iteration order.
         List<Evidence> ordered = sources.stream().sorted(Comparator.comparing(Evidence::sourceId)).toList();
         Map<String, String> labels = new LinkedHashMap<>();
         for (Evidence source : ordered) labels.putIfAbsent(source.sourceId(), "[" + (labels.size() + 1) + "]");
+        Map<String, Evidence> byId = new LinkedHashMap<>();
+        for (Evidence source : ordered) byId.putIfAbsent(source.sourceId(), source);
         Path path = fontPath.isBlank() ? WINDOWS_FONT : Path.of(fontPath);
         try (PDDocument document = new PDDocument(); var fontStream = Files.newInputStream(path);
              var bytes = new ByteArrayOutputStream()) {
@@ -43,19 +62,25 @@ public class ReportPdfRenderer {
             try (var layout = new Layout(document, font)) {
                 layout.paragraph("Copyright Brief", 22);
                 layout.paragraph(title + "  |  v" + version, 13);
+                layout.paragraph("생성일 " + (meta.createdOn() == null ? "미확인" : meta.createdOn())
+                        + "  ·  " + (meta.editedSectionKeys().isEmpty() ? "사용자 수정 없음" : "사용자 수정 내용 포함"), 10);
+                int number = 0;
                 for (Section section : sections) {
-                    layout.heading(section.sectionKey().equals("HUMAN_CONTRIBUTION")
-                            ? "사용자가 확인한 창작 기여" : section.title());
+                    number++;
+                    layout.heading(number + ". " + sectionTitle(section)
+                            + (meta.editedSectionKeys().contains(section.sectionKey()) ? " (사용자 수정)" : ""));
                     for (String paragraph : section.paragraphs()) layout.paragraph(paragraph, 11);
-                    if (!section.sourceIds().isEmpty()) {
-                        layout.paragraph("출처: " + section.sourceIds().stream().map(labels::get).collect(Collectors.joining(", ")), 9);
-                    }
+                    String evidence = evidenceLine(section, labels, byId);
+                    if (evidence != null) layout.paragraph(evidence, 9);
                 }
                 // Keep the heading with several entries instead of leaving one orphaned at the page bottom.
                 if (!sources.isEmpty()) layout.heading("출처 세부 정보", Math.min(sources.size(), 3) * 45f);
                 for (Evidence source : ordered) {
-                    layout.paragraph(labels.get(source.sourceId()) + " " + kindLabel(source.kind()) + " — " + displayTitle(source), 10);
-                    if (source.locator() != null && !source.locator().strip().equals(source.title().strip())) {
+                    layout.paragraph(labels.get(source.sourceId()) + " " + SourceLabels.kind(source.kind()) + " — "
+                            + SourceLabels.title(source), 10);
+                    // Attachment locators are original upload file names; they add noise and may expose local paths.
+                    if (source.locator() != null && !"ATTACHED_FILE".equals(source.kind())
+                            && !source.locator().strip().equals(source.title().strip())) {
                         layout.paragraph(source.locator(), 9);
                     }
                     if (source.officialUrl() != null) {
@@ -64,31 +89,31 @@ public class ReportPdfRenderer {
                         layout.paragraph(source.officialUrl(), 9);
                     }
                 }
+                layout.heading("안내");
+                for (String notice : NOTICES) layout.paragraph(notice, 10);
             }
             document.save(bytes);
             return bytes.toByteArray();
         }
     }
 
-    private static String displayTitle(Evidence source) {
-        if ("USER_STATEMENT".equals(source.kind())) {
-            for (var field : Map.of("AI_TOOL", "사용한 AI 도구", "AI_PURPOSE", "AI 활용 목적",
-                    "AI_OUTPUT_USAGE", "AI 결과 활용", "HUMAN_CREATED_ELEMENT", "직접 창작한 부분",
-                    "HUMAN_EDITED_EXPRESSION", "직접 수정한 부분").entrySet()) {
-                if (source.title().matches("인터뷰 답변 \\d+ \\(" + field.getKey() + "\\)")) return field.getValue();
-            }
+    private static String sectionTitle(Section section) {
+        try {
+            return SectionKey.valueOf(section.sectionKey()).title();
+        } catch (IllegalArgumentException unknownKey) {
+            return section.title();
         }
-        return source.title();
     }
 
-    private static String kindLabel(String kind) {
-        return switch (kind) {
-            case "USER_STATEMENT" -> "인터뷰 답변";
-            case "ATTACHED_FILE" -> "프로젝트 자료";
-            case "IMAGE_OBSERVATION" -> "이미지 관찰";
-            case "OFFICIAL_GUIDE" -> "공식 지침";
-            default -> "기타 자료";
-        };
+    /** "출처: [1], [2] · 사용자 진술 · 첨부자료 기반", or "근거: 미확인" for a fact section without sources. */
+    private static String evidenceLine(Section section, Map<String, String> labels, Map<String, Evidence> byId) {
+        if (section.sourceIds().isEmpty()) {
+            return FACT_SECTIONS.contains(section.sectionKey()) ? "근거: 미확인" : null;
+        }
+        var numbers = section.sourceIds().stream().map(labels::get).filter(Objects::nonNull).collect(Collectors.joining(", "));
+        var tags = section.sourceIds().stream().map(byId::get).filter(Objects::nonNull)
+                .map(source -> SourceLabels.tag(source.kind())).distinct().collect(Collectors.joining(" · "));
+        return "출처: " + numbers + (tags.isEmpty() ? "" : " · " + tags);
     }
 
     private static final class Layout implements AutoCloseable {
