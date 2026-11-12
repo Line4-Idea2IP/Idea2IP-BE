@@ -47,6 +47,27 @@ public final class SourceLabels {
         return title(source.title());
     }
 
+    public static String materialType(String type) {
+        if (type == null) return "자료";
+        return switch (type) {
+            case "INITIAL_SKETCH" -> "초기 스케치";
+            case "AI_ASSISTED" -> "AI 산출물";
+            case "MANUAL_EDIT" -> "직접 수정본";
+            default -> "자료";
+        };
+    }
+
+    /** null when the project has no artwork type. */
+    public static String artworkType(String type) {
+        if (type == null) return null;
+        return switch (type) {
+            case "DIGITAL_ILLUSTRATION" -> "디지털 일러스트";
+            case "CHARACTER_DESIGN" -> "캐릭터 디자인";
+            case "GRAPHIC_DESIGN" -> "그래픽 디자인";
+            default -> type;
+        };
+    }
+
     public static boolean isInterviewTitle(String title) {
         return title != null && INTERVIEW_TITLE.matcher(title.strip()).matches();
     }

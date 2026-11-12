@@ -66,8 +66,16 @@ public final class ReportModels {
                          String templateVersion, String mode) {}
     public record PdfDownload(int versionNo, byte[] bytes) {}
 
+    /** profile is null in snapshots stored before it existed. */
     public record InputSnapshot(Input aiInput, List<Confirmed> contributions, String noContributionReason,
-                                List<String> warnings) {}
+                                List<String> warnings, Profile profile) {}
+
+    /** Project facts printed in the report as stored, never sent to the AI service. Dates are ISO strings. */
+    public record Profile(String artworkType, String projectDescription, String artworkTitle, String artworkDescription,
+                          List<MaterialFact> materials) {}
+
+    public record MaterialFact(Long materialId, String type, String title, String description, String usedAi,
+                               String productionDate, int fileCount, int order) {}
 
     public record Content(String schemaVersion, String mode, List<Section> sections, List<Evidence> sources,
                           List<String> editedSectionKeys, List<Flag> reviewFlags) {}

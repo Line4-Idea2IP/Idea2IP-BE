@@ -55,11 +55,11 @@ class ReportChecklistTests {
     @Test void assemblerNumbersItemsAndKeepsGuidanceStatusLast() {
         var ai = new Input("1", "가상 작품", "v1", List.of());
         var draft = new Draft("1.0", "live", List.of(), List.of());
-        var input = new InputSnapshot(ai, List.of(), null, List.of("첫째 항목", "둘째 항목"));
+        var input = new InputSnapshot(ai, List.of(), null, List.of("첫째 항목", "둘째 항목"), null);
         var gaps = new ReportContentAssembler().assemble(input, draft, null, null).sections().get(4).paragraphs();
         assertEquals(List.of("1. 첫째 항목", "2. 둘째 항목", ReportContentAssembler.NO_OFFICIAL_GUIDE), gaps);
 
-        var none = new InputSnapshot(ai, List.of(), null, List.of(ReportChecklist.NOTHING_MISSING));
+        var none = new InputSnapshot(ai, List.of(), null, List.of(ReportChecklist.NOTHING_MISSING), null);
         assertEquals(List.of(ReportChecklist.NOTHING_MISSING, ReportContentAssembler.NO_OFFICIAL_GUIDE),
                 new ReportContentAssembler().assemble(none, draft, null, null).sections().get(4).paragraphs());
     }

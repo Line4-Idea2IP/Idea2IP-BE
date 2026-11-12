@@ -99,7 +99,7 @@ public class ReportService {
             var confirmed = contributions.confirmedSteps(projectId);
             // The checklist covers readiness warnings (missing material types) with more specific actions.
             snapshot = new InputSnapshot(input.capture(project), confirmed, contributions.noContributionReason(projectId),
-                    checklist.items(project, confirmed, contributions.unresolvedFields(projectId)));
+                    checklist.items(project, confirmed, contributions.unresolvedFields(projectId)), profile(project));
         }
         if (report == null) report = reports.save(new Report(project));
         return detail(versions.save(new ReportVersion(report, req, revision, snapshot)));
@@ -205,6 +205,20 @@ public class ReportService {
         var blocked = checks.stream().filter(item -> item.status() == CheckStatus.BLOCKED).toList();
         var warnings = checks.stream().filter(item -> item.status() == CheckStatus.WARNING).toList();
         return new Readiness(blocked.isEmpty(), checks, blocked, warnings, project.getInputRevision());
+    }
+
+    private Profile profile(Project project) {
+        Long id = project.getProjectId();
+        var artwork = artworks.findByProject_ProjectId(id).orElse(null);
+        var facts = materials.findAllByProject_ProjectIdOrderByMaterialOrderAsc(id).stream()
+                .map(material -> new MaterialFact(material.getMaterialId(), material.getMaterialType().name(),
+                        material.getTitle(), material.getDescription(), material.getUsedAi(),
+                        material.getProductionDate() == null ? null : material.getProductionDate().toString(),
+                        material.getFiles().size(), material.getMaterialOrder()))
+                .toList();
+        return new Profile(project.getArtworkType() == null ? null : project.getArtworkType().name(),
+                project.getDescription(), artwork == null ? null : artwork.getTitle(),
+                artwork == null ? null : artwork.getDescription(), facts);
     }
 
     private Check check(String code, boolean ready, boolean warning, String message) {
