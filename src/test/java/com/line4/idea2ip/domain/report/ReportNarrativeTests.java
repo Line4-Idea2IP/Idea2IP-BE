@@ -46,8 +46,29 @@ class ReportNarrativeTests {
     }
 
     @Test void aiUsageLinksStageOutputAndFinalUse() {
-        assertEquals(List.of("구도 자료 (AI 산출물 · 2026-11-01)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
+        assertEquals(List.of("관련 자료: 구도 자료 (AI 산출물 · 2026-11-01)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
                 + "\n사용 목적: 손의 배치 시안 비교\n최종 작품 반영: 미확인"), sections(profile).get(1).paragraphs());
+    }
+
+    @Test void aiAnswersSplitAcrossStepsFormOneUseWithoutFalseUnknowns() {
+        // As in the E2E: tool and final-use answers became interview-only steps, the purpose linked to the material.
+        var output = ev("answer:26", "USER_STATEMENT", "인터뷰 답변 6 (AI_OUTPUT_USAGE)", "손 배치 아이디어만 참고");
+        var split = List.of(
+                new Confirmed("인터뷰 답변 2 (AI_TOOL)", new Content(new AiUsage(List.of("Stable Diffusion"), null, null),
+                        List.of(), List.of()), List.of(tool)),
+                new Confirmed("구도 자료", new Content(new AiUsage(List.of(), "손의 배치 시안 비교", null),
+                        List.of(), List.of()), List.of(ai, purpose)),
+                new Confirmed("인터뷰 답변 6 (AI_OUTPUT_USAGE)", new Content(new AiUsage(List.of(), null, "손 배치 아이디어만 참고"),
+                        List.of(), List.of()), List.of(output)));
+        var input = new InputSnapshot(new Input("3", "사슬과 푸른 시계", "v1", List.of(artwork)), split, null, List.of(), profile);
+        var content = new ReportContentAssembler().assemble(input, new Draft("1.0", "live", List.of(), List.of()), null, null);
+        var aiSection = content.sections().get(1);
+        assertEquals(List.of("관련 자료: 구도 자료 (AI 산출물 · 2026-11-01)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
+                + "\n사용 목적: 손의 배치 시안 비교\n최종 작품 반영: 손 배치 아이디어만 참고"), aiSection.paragraphs());
+        assertFalse(aiSection.paragraphs().getFirst().contains("미확인"));
+        // Quotes survive in the stored sources so the PDF can cite each line.
+        assertEquals("손 배치 아이디어만 참고", content.sources().stream()
+                .filter(source -> source.sourceId().equals("answer:26")).findFirst().orElseThrow().quote());
     }
 
     @Test void humanContributionNamesTheMaterialAndStage() {
