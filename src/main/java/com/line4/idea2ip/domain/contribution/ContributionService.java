@@ -144,6 +144,10 @@ public class ContributionService {
                 .map(step -> new Confirmed(step.getTitle(), step.getContent(), step.evidence())).toList();
     }
 
+    public List<String> unresolvedFields(Long projectId) {
+        return reviews.findByProject_ProjectId(projectId).map(ContributionReview::getUnresolvedFields).orElse(List.of());
+    }
+
     public String noContributionReason(Long projectId) {
         return reviews.findByProject_ProjectId(projectId).map(ContributionReview::getNoContributionReason).orElse(null);
     }

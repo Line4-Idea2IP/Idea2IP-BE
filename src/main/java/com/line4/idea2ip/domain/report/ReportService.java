@@ -41,6 +41,7 @@ public class ReportService {
     private final ReportRepository reports;
     private final ReportVersionRepository versions;
     private final ReportPdfStorage pdfs;
+    private final ReportChecklist checklist;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Readiness readiness(Long userId, Long projectId) {
@@ -95,8 +96,10 @@ public class ReportService {
             if (req.operation() == Operation.UPDATE && !changes.summarize(projectId, base.getInputRevision(), revision).hasChanges()) {
                 throw conflict("NO_REPORT_INPUT_CHANGES", "리포트에 반영할 새 입력이 없습니다.");
             }
-            snapshot = new InputSnapshot(input.capture(project), contributions.confirmedSteps(projectId),
-                    contributions.noContributionReason(projectId), readiness.warnings().stream().map(Check::message).toList());
+            var confirmed = contributions.confirmedSteps(projectId);
+            // The checklist covers readiness warnings (missing material types) with more specific actions.
+            snapshot = new InputSnapshot(input.capture(project), confirmed, contributions.noContributionReason(projectId),
+                    checklist.items(project, confirmed, contributions.unresolvedFields(projectId)));
         }
         if (report == null) report = reports.save(new Report(project));
         return detail(versions.save(new ReportVersion(report, req, revision, snapshot)));

@@ -8,6 +8,9 @@ import java.util.*;
 
 @Component
 class ReportContentAssembler {
+    static final String NO_OFFICIAL_GUIDE =
+            "공식 지침: 검토된 공식 판본이 연결되지 않았습니다. 등록 신청 전 한국저작권위원회 등 공식 안내를 직접 확인해 주세요.";
+
     Content assemble(InputSnapshot input, Draft draft, Content base, InputSnapshot baseInput) {
         Map<String, Evidence> sources = new LinkedHashMap<>();
         for (var source : draft.sources()) sources.put(source.sourceId(), source);
@@ -66,10 +69,16 @@ class ReportContentAssembler {
         byKey.put(SectionKey.EVIDENCE_SUMMARY.name(), summary);
 
         var guidance = byKey.get(SectionKey.GAPS_AND_GUIDANCE.name());
-        var gaps = new ArrayList<>(input.warnings());
+        // Numbered to-do items first; official guidance status is listed separately below them.
+        var gaps = new ArrayList<String>();
+        var todo = input.warnings();
+        for (int i = 0; i < todo.size(); i++) {
+            gaps.add(todo.size() == 1 && todo.getFirst().equals(ReportChecklist.NOTHING_MISSING)
+                    ? todo.getFirst() : (i + 1) + ". " + todo.get(i));
+        }
         if (guidance != null) gaps.addAll(guidance.paragraphs());
         if (sources.values().stream().noneMatch(source -> "OFFICIAL_GUIDE".equals(source.kind()))) {
-            gaps.add("검토된 공식 지침을 확인할 수 없습니다.");
+            gaps.add(NO_OFFICIAL_GUIDE);
         }
         byKey.put(SectionKey.GAPS_AND_GUIDANCE.name(), section(SectionKey.GAPS_AND_GUIDANCE,
                 gaps, guidance == null ? List.of() : guidance.sourceIds()));
