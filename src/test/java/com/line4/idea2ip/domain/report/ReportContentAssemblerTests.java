@@ -21,7 +21,7 @@ class ReportContentAssemblerTests {
         var human = result.sections().get(2);
         assertEquals("사용자가 확인한 창작 기여", human.title());
         assertEquals(List.of("사용자 수정 단계 · 직접 창작: 확정 창작", "사용자 수정 단계 · 직접 수정: 확정 수정"), human.paragraphs());
-        assertTrue(result.sections().get(4).paragraphs().contains("검토된 공식 지침을 확인할 수 없습니다."));
+        assertTrue(result.sections().get(4).paragraphs().contains(ReportContentAssembler.NO_OFFICIAL_GUIDE));
     }
 
     @Test void sectionsCiteOnlyAnswersBehindTheirStatements() {
