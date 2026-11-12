@@ -2,3 +2,4 @@
 *.bat text eol=crlf
 *.jar binary
 deploy/*.sh text eol=lf
+deploy/systemd/* text eol=lf

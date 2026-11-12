@@ -61,6 +61,7 @@ services:
       MATERIAL_IMAGE_DIR: /data/uploads/material-images
       ARTWORK_IMAGE_DIR: /data/uploads/artwork-images
       SPRING_JPA_SHOW_SQL: "false"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,https://idea2ip.netlify.app}
     volumes:
       - uploads:/data/uploads
       - report-pdfs:/data/report-pdfs

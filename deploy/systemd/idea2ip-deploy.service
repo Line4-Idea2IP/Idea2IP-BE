@@ -1,0 +1,13 @@
+[Unit]
+Description=Idea2IP auto deploy: deploy the newest published main release
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Adjust the user and path if the repository is cloned elsewhere.
+User=deploy
+WorkingDirectory=/opt/idea2ip
+EnvironmentFile=-/etc/idea2ip/auto-deploy.env
+ExecStart=/usr/bin/env bash /opt/idea2ip/deploy/auto-deploy.sh
+TimeoutStartSec=20min
