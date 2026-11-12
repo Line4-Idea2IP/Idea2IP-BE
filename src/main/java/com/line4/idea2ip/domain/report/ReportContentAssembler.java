@@ -23,7 +23,13 @@ class ReportContentAssembler {
         Map<Long, MaterialFact> facts = new HashMap<>();
         if (profile != null && profile.materials() != null) profile.materials().forEach(fact -> facts.put(fact.materialId(), fact));
         List<String> human = new ArrayList<>();
-        List<String> confirmedAi = new ArrayList<>();
+        // The interview asks tool, purpose and final use once per project, but the answers can land on
+        // different contribution steps; they describe one AI use and are shown as one block.
+        Set<String> aiTools = new LinkedHashSet<>();
+        Set<String> aiPurposes = new LinkedHashSet<>();
+        Set<String> aiOutputs = new LinkedHashSet<>();
+        Map<Long, MaterialFact> aiMaterials = new LinkedHashMap<>();
+        boolean anyAi = false;
         Set<String> aiSourceIds = new LinkedHashSet<>();
         Set<String> humanSourceIds = new LinkedHashSet<>();
         for (var step : input.contributions()) {
@@ -35,37 +41,39 @@ class ReportContentAssembler {
             if (!humanLines.isEmpty()) human.add(paragraph(header, humanLines));
             var usage = step.content().aiUsage();
             if (usage != null) {
+                anyAi = true;
                 var aiTexts = new ArrayList<String>();
-                var aiLines = new ArrayList<String>();
-                if (usage.tools() != null && !usage.tools().isEmpty()) {
-                    aiTexts.addAll(usage.tools());
-                    aiLines.add("도구: " + String.join(", ", usage.tools()));
-                }
-                // The material description is the user's own account of what the AI produced.
-                if (fact != null && hasText(fact.description()) && "AI_ASSISTED".equals(fact.type())) {
-                    aiLines.add("산출물 설명: " + excerpt(fact.description(), 300));
-                }
-                if (usage.purpose() != null) {
+                if (usage.tools() != null) usage.tools().stream().filter(ReportContentAssembler::hasText).forEach(tool -> {
+                    aiTools.add(tool.strip());
+                    aiTexts.add(tool);
+                });
+                if (hasText(usage.purpose())) {
+                    aiPurposes.add(usage.purpose().strip());
                     aiTexts.add(usage.purpose());
-                    aiLines.add("사용 목적: " + usage.purpose());
                 }
-                if (usage.outputUsage() != null) aiTexts.add(usage.outputUsage());
-                aiLines.add("최종 작품 반영: " + (hasText(usage.outputUsage()) ? usage.outputUsage() : "미확인"));
-                confirmedAi.add(paragraph(header, aiLines));
+                if (hasText(usage.outputUsage())) {
+                    aiOutputs.add(usage.outputUsage().strip());
+                    aiTexts.add(usage.outputUsage());
+                }
+                if (fact != null) aiMaterials.putIfAbsent(fact.materialId(), fact);
                 aiSourceIds.addAll(relevantSourceIds(step.sources(), aiTexts));
             }
             var humanTexts = new ArrayList<>(step.content().humanCreatedElements());
             humanTexts.addAll(step.content().humanEdits());
             if (!humanTexts.isEmpty()) humanSourceIds.addAll(relevantSourceIds(step.sources(), humanTexts));
-            for (var evidence : step.sources()) sources.putIfAbsent(evidence.sourceId(), evidence);
+            for (var evidence : step.sources()) {
+                sources.merge(evidence.sourceId(), evidence,
+                        (known, confirmed) -> known.quote() == null && confirmed.quote() != null ? confirmed : known);
+            }
         }
         if (human.isEmpty()) human.add(input.noContributionReason() == null
                 ? "확정된 직접 창작·수정 내용이 없습니다." : "사용자 확정: 창작 기여 없음 — " + input.noContributionReason());
         byKey.put(SectionKey.HUMAN_CONTRIBUTION.name(), section(SectionKey.HUMAN_CONTRIBUTION, human,
                 List.copyOf(humanSourceIds)));
 
-        if (!confirmedAi.isEmpty()) {
-            byKey.put(SectionKey.AI_USAGE.name(), section(SectionKey.AI_USAGE, confirmedAi, List.copyOf(aiSourceIds)));
+        if (anyAi) {
+            byKey.put(SectionKey.AI_USAGE.name(), section(SectionKey.AI_USAGE,
+                    List.of(aiParagraph(aiTools, aiPurposes, aiOutputs, aiMaterials.values())), List.copyOf(aiSourceIds)));
         }
 
         var artwork = input.aiInput().sources().stream().filter(source -> source.artworkId() != null).toList();
@@ -172,6 +180,28 @@ class ReportContentAssembler {
         if (answers > 0) lines.add("인터뷰 답변 " + answers + "건 (사용자 진술) — 아래 출처 세부 정보 참고");
         if (lines.isEmpty()) lines.add("등록된 창작 과정 자료가 없습니다.");
         return lines;
+    }
+
+    /** One AI use: related materials, then tool, output, purpose and final use; "미확인" only when nobody answered. */
+    private static String aiParagraph(Set<String> tools, Set<String> purposes, Set<String> outputs,
+                                      Collection<MaterialFact> materials) {
+        var lines = new ArrayList<String>();
+        var related = materials.stream().map(fact -> fact.title() + " (" + SourceLabels.materialType(fact.type())
+                + (fact.productionDate() == null ? "" : " · " + fact.productionDate()) + ")").toList();
+        if (!related.isEmpty()) lines.add("관련 자료: " + String.join(", ", related));
+        lines.add("도구: " + (tools.isEmpty() ? "미확인" : String.join(", ", tools)));
+        // The material description is the user's own account of what the AI produced.
+        var outputsDescribed = materials.stream()
+                .filter(fact -> "AI_ASSISTED".equals(fact.type()) && hasText(fact.description())).toList();
+        for (var fact : outputsDescribed) {
+            lines.add("산출물 설명" + (outputsDescribed.size() > 1 ? " (" + fact.title() + ")" : "") + ": "
+                    + excerpt(fact.description(), 300));
+        }
+        if (purposes.isEmpty()) lines.add("사용 목적: 미확인");
+        else purposes.forEach(purpose -> lines.add("사용 목적: " + purpose));
+        if (outputs.isEmpty()) lines.add("최종 작품 반영: 미확인");
+        else outputs.forEach(output -> lines.add("최종 작품 반영: " + output));
+        return String.join("\n", lines);
     }
 
     private static List<String> linkedWork(Long materialId, List<Confirmed> steps) {

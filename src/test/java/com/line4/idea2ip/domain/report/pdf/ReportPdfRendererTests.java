@@ -57,6 +57,42 @@ class ReportPdfRendererTests {
         for (String notice : ReportPdfRenderer.NOTICES) assertTrue(text.replaceAll("\\s+", "").contains(notice.replaceAll("\\s+", "")));
     }
 
+    @Test void linesCiteTheStatementTheyQuote() {
+        var edit = new Evidence("answer:50", "USER_STATEMENT", "직접 수정한 부분", "시계판을 파란색으로 칠했습니다.", null,
+                null, null, null, null, null, null, null);
+        var tool = new Evidence("answer:42", "USER_STATEMENT", "사용한 AI 도구", "Stable Diffusion", null,
+                null, null, null, null, null, null, null);
+        var section = new Section("AI_USAGE", "AI", List.of(), List.of("answer:42", "answer:50"));
+        var labels = java.util.Map.of("answer:42", "[1]", "answer:50", "[2]");
+        var byId = java.util.Map.of("answer:42", tool, "answer:50", edit);
+        assertEquals("도구: Stable Diffusion, Midjourney [1]\n산출물 설명: Stable Diffusion으로 만든 시안\n직접 수정: 시계판을 파란색으로 칠했습니다. [2]",
+                ReportPdfRenderer.cite("도구: Stable Diffusion, Midjourney\n산출물 설명: Stable Diffusion으로 만든 시안"
+                        + "\n직접 수정: 시계판을 파란색으로 칠했습니다.", section, labels, byId));
+    }
+
+    @Test void shortBlockMovesToTheNextPageWhole() throws Exception {
+        var renderer = renderer();
+        boolean crossedPage = false;
+        // Sweep the block's position so at least one run puts it at the bottom of a page.
+        for (int count = 20; count <= 45; count++) {
+            var filler = new java.util.ArrayList<String>();
+            for (int i = 0; i < count; i++) filler.add("채움 문단 " + i);
+            filler.add("항목 첫 줄\n항목 둘째 줄\n항목 셋째 줄\n항목 넷째 줄");
+            var section = new Section("EVIDENCE_SUMMARY", "참고자료", filler, List.of());
+            try (var pdf = Loader.loadPDF(renderer.render("가상 작품", 1, META, List.of(section), List.of()))) {
+                for (int page = 1; page <= pdf.getNumberOfPages(); page++) {
+                    var stripper = new PDFTextStripper();
+                    stripper.setStartPage(page);
+                    stripper.setEndPage(page);
+                    String text = stripper.getText(pdf);
+                    assertEquals(text.contains("항목 첫 줄"), text.contains("항목 넷째 줄"), "block split, count " + count);
+                    if (page > 1 && text.startsWith("항목 첫 줄")) crossedPage = true;
+                }
+            }
+        }
+        assertTrue(crossedPage, "no run placed the block at a page boundary");
+    }
+
     private String text(byte[] bytes) throws Exception {
         try (var pdf = Loader.loadPDF(bytes)) { return new PDFTextStripper().getText(pdf); }
     }
