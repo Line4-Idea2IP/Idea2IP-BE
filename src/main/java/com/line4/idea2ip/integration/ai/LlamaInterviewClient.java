@@ -73,9 +73,11 @@ class LlamaInterviewClient implements AiInterviewClient {
                 .map(item -> new Evidence(item.sourceId(), item.type(), excerpt(item.title(), 120),
                         excerpt(item.description(), 250), excerpt(item.usedAi(), 80)))
                 .toList();
+        // A supplementary question stays in this field but asks only for the missing creative choice or stage.
+        var supplement = InterviewSupplement.next(field, InterviewSupplement.answersFor(context, field));
         String input = mapper.writeValueAsString(Map.of("title", excerpt(context.title(), 120),
-                "targetField", field, "focus", focus(field),
-                "exampleQuestion", MockAiInterviewClient.baseQuestion(field),
+                "targetField", field, "focus", supplement.map(value -> value.focus).orElse(focus(field)),
+                "exampleQuestion", supplement.map(value -> value.question).orElse(MockAiInterviewClient.baseQuestion(field)),
                 "isFollowUp", !answers.isEmpty(), "previousAnswersForThisField", answers, "evidence", evidence));
 
         JsonNode response = client.post().uri(endpoint).contentType(MediaType.APPLICATION_JSON)
@@ -106,7 +108,8 @@ class LlamaInterviewClient implements AiInterviewClient {
             sourceIds.add(id.asString());
         }
         boolean followUp = !answers.isEmpty();
-        String reason = followUp ? "앞선 답변의 구체적인 내용을 확인합니다." : "창작 과정의 해당 항목을 확인합니다.";
+        String reason = supplement.map(value -> value.reason)
+                .orElse(followUp ? "앞선 답변의 구체적인 내용을 확인합니다." : "창작 과정의 해당 항목을 확인합니다.");
         String question = withoutSourceIds(draft.path("question").asString(), evidence);
         if (question.isBlank() || question.length() > QUESTION_MAX) {
             throw invalidResponse();
