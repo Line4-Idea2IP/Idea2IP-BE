@@ -11,6 +11,7 @@ import com.line4.idea2ip.domain.project.dto.ProjectDetailRes;
 import com.line4.idea2ip.domain.project.dto.ProjectListRes;
 import com.line4.idea2ip.domain.project.dto.ProjectThumbnailRes;
 import com.line4.idea2ip.domain.project.entity.Project;
+import com.line4.idea2ip.domain.project.entity.ProjectStatus;
 import com.line4.idea2ip.domain.project.repository.ProjectRepository;
 import com.line4.idea2ip.domain.project.storage.ProjectThumbnailStorage;
 import com.line4.idea2ip.domain.user.entity.User;
@@ -76,6 +77,8 @@ public class ProjectService {
                         .updatedAt(project.getUpdateAt())
                         .artworkType(project.getArtworkType())
                         .thumbnailUrl(project.getThumbnailUrl())
+                        .status(status.reportStatus() == ReportStatus.READY
+                                ? ProjectStatus.COMPLETED : ProjectStatus.IN_PROGRESS)
                         .materialCount(progress.materialCount(project.getProjectId()))
                         .interviewStatus(progress.interviewStatus(project.getProjectId()))
                         .reportStatus(status.reportStatus())
@@ -83,7 +86,7 @@ public class ProjectService {
                         .reportUpdateAvailable(status.reportUpdateAvailable())
                         .build();
         }).toList();
-        long completed = projects.stream().filter(item -> item.getReportStatus() == ReportStatus.READY).count();
+        long completed = projects.stream().filter(item -> item.getStatus() == ProjectStatus.COMPLETED).count();
 
         return ProjectListRes.builder()
                 .projects(projects)
