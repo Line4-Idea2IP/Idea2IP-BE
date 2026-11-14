@@ -37,7 +37,15 @@ class MockAiInterviewClient implements AiInterviewClient {
         var supplement = InterviewSupplement.next(field, InterviewSupplement.answersFor(context, field));
         // Same rules as the live client: a repeated follow-up never reuses an earlier question of this field.
         var recent = InterviewQuestions.recentAndSameField(context, field);
-        String prompt = followUp ? InterviewQuestions.followUp(field, recent, supplement)
+        String latest = context.answers().reversed().stream().filter(answer -> answer.field() == field)
+                .map(Answer::content).findFirst().orElse(null);
+        var related = followUp ? java.util.Optional.<InterviewQuestions.Related>empty()
+                : InterviewQuestions.related(context, field);
+        if (related.isPresent()) {
+            return new QuestionDraft(InterviewQuestions.unused(field, InterviewQuestions.opening(field, related.get()), recent),
+                    InterviewQuestions.OPENING_REASON, List.of());
+        }
+        String prompt = followUp ? InterviewQuestions.followUp(field, recent, supplement, latest)
                 : InterviewQuestions.unused(field, baseQuestion(field), recent);
         if (InterviewQuestions.isClosingQuestion(field, prompt)) {
             return new QuestionDraft(prompt, InterviewQuestions.CLOSING_REASON, List.of());
@@ -57,9 +65,9 @@ class MockAiInterviewClient implements AiInterviewClient {
     public InterviewFieldState analyzeAnswer(Context context, Answer answer) {
         String text = answer.content();
         var answers = InterviewSupplement.answersWith(context, answer);
-        // Recognised by the question text, not the display reason, so rewording the reason cannot break it.
-        if (InterviewQuestions.isClosingQuestion(answer.field(), answer.question())
-                && InterviewFieldState.isNotApplicableAnswer(text)) {
+        boolean none = InterviewFieldState.isNotApplicableAnswer(text);
+        boolean closing = InterviewQuestions.isClosingQuestion(answer.field(), answer.question());
+        if (none && closing) {
             return new InterviewFieldState(answer.field(), NEEDS_REVIEW, String.join(" / ", answers), true);
         }
         var earlier = answers.subList(0, answers.size() - 1);
@@ -67,7 +75,17 @@ class MockAiInterviewClient implements AiInterviewClient {
             // This replies to the supplementary question; any reply, including "없습니다", completes the field.
             return new InterviewFieldState(answer.field(), COMPLETED, earlier.getFirst() + " / " + text);
         }
-        if (InterviewFieldState.isNotApplicableAnswer(text)) {
+        if (none) {
+            String opening = InterviewQuestions.isOpeningQuestion(answer.field(), answer.question())
+                    ? answer.question()
+                    : InterviewQuestions.askedFor(context, answer.field()).stream()
+                            .filter(question -> InterviewQuestions.isOpeningQuestion(answer.field(), question))
+                            .findFirst().orElse(null);
+            if (opening != null) {
+                // A bare "없음" after an opening about already reported work leaves a gap in the details.
+                return new InterviewFieldState(answer.field(), NEEDS_REVIEW,
+                        "앞선 답변: " + InterviewQuestions.openingStatement(opening) + " / " + String.join(" / ", answers));
+            }
             // AI materials are optional, so "없음" is a valid answer for AI fields as well as human work.
             return new InterviewFieldState(answer.field(), NOT_APPLICABLE, text);
         }

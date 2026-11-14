@@ -44,7 +44,8 @@ class InterviewSupplementTests {
     @Test void fieldStaysOpenForOneSupplementThenCompletes() {
         assertEquals(Status.NEEDS_REVIEW, answer(HUMAN_EDITED_EXPRESSION, "시계판을 파란색으로 직접 칠했습니다."));
         var question = client.generateQuestion(context(), HUMAN_EDITED_EXPRESSION);
-        assertEquals(InterviewSupplement.CREATIVE_CHOICE.question, question.content());
+        assertEquals(InterviewSupplement.CREATIVE_CHOICE.questionFor("시계판을 파란색으로 직접 칠했습니다."), question.content());
+        assertTrue(question.content().startsWith("‘시계판을 파란색으로 직접 칠했습니다’라고 하셨는데"));
         assertEquals(InterviewSupplement.CREATIVE_CHOICE.reason, question.reason());
 
         // Even "없습니다" answers the supplement; it never reopens or downgrades the field.

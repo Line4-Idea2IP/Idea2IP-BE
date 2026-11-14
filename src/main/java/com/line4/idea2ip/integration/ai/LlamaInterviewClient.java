@@ -79,15 +79,28 @@ class LlamaInterviewClient implements AiInterviewClient {
         var recentQuestions = InterviewQuestions.recentAndSameField(context, field);
         boolean followUp = !answers.isEmpty();
         var supplement = InterviewSupplement.next(field, InterviewSupplement.answersFor(context, field));
-        String example = followUp ? InterviewQuestions.followUp(field, recentQuestions, supplement)
+        String latest = context.answers().reversed().stream().filter(answer -> answer.field() == field)
+                .map(Answer::content).findFirst().orElse(null);
+        String example = followUp ? InterviewQuestions.followUp(field, recentQuestions, supplement, latest)
                 : InterviewQuestions.unused(field, MockAiInterviewClient.baseQuestion(field), recentQuestions);
         String reason = supplement.map(value -> value.reason)
                 .orElse(followUp ? FOLLOW_UP_REASON : "창작 과정의 해당 항목을 확인합니다.");
         if (InterviewQuestions.isClosingQuestion(field, example)) {
             return new QuestionDraft(example, InterviewQuestions.CLOSING_REASON, List.of());
         }
-        if (followUp && supplement.isEmpty()) {
-            // A vague answer needs a narrower prompt. Use a field-specific question without inventing context.
+        if (followUp) {
+            // Follow-ups quote the user's own words or narrow the field; a model paraphrase could state details
+            // (a position, a reason) the user never gave.
+            return new QuestionDraft(example, reason, List.of());
+        }
+        var related = InterviewQuestions.related(context, field);
+        if (related.isPresent()) {
+            // The work was already described under another field: ask about it instead of whether it happened.
+            String opening = InterviewQuestions.unused(field, InterviewQuestions.opening(field, related.get()), recentQuestions);
+            return new QuestionDraft(opening, InterviewQuestions.OPENING_REASON, List.of());
+        }
+        // A related mention without a usable statement may describe someone else's work or a correction.
+        if (InterviewQuestions.mentionsRelatedWork(context, field)) {
             return new QuestionDraft(example, reason, List.of());
         }
 

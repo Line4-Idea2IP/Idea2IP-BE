@@ -205,14 +205,19 @@ class InterviewQuestionsTests {
     }
 
     @Test void liveClientSendsEarlierTurnsAndReplacesARepeatedQuestion() throws Exception {
+        // A new AI field with no deterministic opening: the model writes it from the earlier AI answers.
         var mapper = JsonMapper.builder().build();
-        var context = interviewUpToHumanEdits();
+        var turns = List.of(new PreviousTurn(AI_TOOL, "어떤 AI 도구를 사용했나요?", "Stable Diffusion"),
+                new PreviousTurn(AI_PURPOSE, "어떤 목적으로 사용했나요?", "손 위치가 다른 시안을 비교했어요."));
+        var context = new Context(1L, "가상 작품", "snapshot",
+                List.of(new Answer(1L, AI_TOOL, "Stable Diffusion"), new Answer(2L, AI_PURPOSE, "손 위치가 다른 시안을 비교했어요.")),
+                List.of(), turns.stream().map(turn -> new AskedQuestion(turn.field(), turn.question())).toList(), turns);
         String repeated = context.questions().getLast().content();  // the model echoes the previous question
         var request = new AtomicReference<JsonNode>();
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             request.set(mapper.readTree(exchange.getRequestBody().readAllBytes()));
-            String draft = mapper.writeValueAsString(Map.of("target_field", "HUMAN_EDITED_EXPRESSION",
+            String draft = mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE",
                     "question", repeated, "source_ids", List.of()));
             byte[] body = mapper.writeValueAsBytes(Map.of("choices", List.of(Map.of("finish_reason", "stop",
                     "message", Map.of("content", draft)))));
@@ -224,15 +229,15 @@ class InterviewQuestionsTests {
         try {
             var client = new LlamaInterviewClient("http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
                     "test-model", mapper, new MockAiInterviewClient());
-            var draft = client.generateQuestion(context, HUMAN_EDITED_EXPRESSION);
+            var draft = client.generateQuestion(context, AI_OUTPUT_USAGE);
 
             JsonNode input = mapper.readTree(request.get().path("messages").path(1).path("content").asString());
             var earlier = new ArrayList<String>();
             input.path("earlierTurns").forEach(turn -> earlier.add(turn.path("answer").asString()));
-            assertTrue(earlier.contains(OUTPUT_ANSWER), earlier.toString());
+            assertTrue(earlier.contains("손 위치가 다른 시안을 비교했어요."), earlier.toString());
             assertTrue(input.path("recentQuestions").toString().contains(repeated));
 
-            assertEquals(MockAiInterviewClient.baseQuestion(HUMAN_EDITED_EXPRESSION), draft.content());
+            assertEquals(MockAiInterviewClient.baseQuestion(AI_OUTPUT_USAGE), draft.content());
         } finally {
             server.stop(0);
         }
