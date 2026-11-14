@@ -33,13 +33,14 @@ class MockAiInterviewClient implements AiInterviewClient {
 
     @Override
     public QuestionDraft generateQuestion(Context context, InterviewField field) {
-        String prompt = baseQuestion(field);
         boolean followUp = context.answers().stream().anyMatch(answer -> answer.field() == field);
         var supplement = InterviewSupplement.next(field, InterviewSupplement.answersFor(context, field));
-        if (supplement.isPresent()) {
-            prompt = supplement.get().question;
-        } else if (followUp) {
-            prompt = "앞선 답변을 조금 더 구체적으로 알려주세요. " + prompt;
+        // Same rules as the live client: a repeated follow-up never reuses an earlier question of this field.
+        var recent = InterviewQuestions.recentAndSameField(context, field);
+        String prompt = followUp ? InterviewQuestions.followUp(field, recent, supplement)
+                : InterviewQuestions.unused(field, baseQuestion(field), recent);
+        if (InterviewQuestions.isClosingQuestion(field, prompt)) {
+            return new QuestionDraft(prompt, InterviewQuestions.CLOSING_REASON, List.of());
         }
         MaterialType referenceType = referenceType(field);
         List<String> sourceIds = context.evidence().stream()
@@ -56,6 +57,11 @@ class MockAiInterviewClient implements AiInterviewClient {
     public InterviewFieldState analyzeAnswer(Context context, Answer answer) {
         String text = answer.content();
         var answers = InterviewSupplement.answersWith(context, answer);
+        // Recognised by the question text, not the display reason, so rewording the reason cannot break it.
+        if (InterviewQuestions.isClosingQuestion(answer.field(), answer.question())
+                && InterviewFieldState.isNotApplicableAnswer(text)) {
+            return new InterviewFieldState(answer.field(), NEEDS_REVIEW, String.join(" / ", answers), true);
+        }
         var earlier = answers.subList(0, answers.size() - 1);
         if (InterviewSupplement.next(answer.field(), earlier).isPresent()) {
             // This replies to the supplementary question; any reply, including "없습니다", completes the field.

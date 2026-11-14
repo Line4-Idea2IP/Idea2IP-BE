@@ -59,9 +59,11 @@ class InterviewSupplementTests {
         assertEquals(Status.NOT_APPLICABLE, answer(HUMAN_EDITED_EXPRESSION, "없습니다"));
     }
 
-    @Test void shortAnswersKeepTheGenericFollowUp() {
+    @Test void shortAnswersGetANarrowerFollowUpInsteadOfTheSameQuestion() {
         assertEquals(Status.NEEDS_REVIEW, answer(HUMAN_CREATED_ELEMENT, "칠함"));
-        assertTrue(client.generateQuestion(context(), HUMAN_CREATED_ELEMENT).content().startsWith("앞선 답변을 조금 더 구체적으로"));
+        var followUp = client.generateQuestion(context(), HUMAN_CREATED_ELEMENT).content();
+        assertNotEquals(MockAiInterviewClient.baseQuestion(HUMAN_CREATED_ELEMENT), followUp);
+        assertTrue(followUp.contains("한 가지"));
     }
 
     private Answer addAnswer(InterviewField field, String content) {
