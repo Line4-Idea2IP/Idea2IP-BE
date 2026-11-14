@@ -12,10 +12,25 @@ public interface AiInterviewClient {
     InterviewFieldState analyzeAnswer(Context context, Answer answer);
 
     record Context(Long projectId, String title, String snapshotVersion,
-                   List<Answer> answers, List<Evidence> evidence) {
+                   List<Answer> answers, List<Evidence> evidence, List<AskedQuestion> questions,
+                   List<PreviousTurn> turns) {
+        public Context(Long projectId, String title, String snapshotVersion, List<Answer> answers, List<Evidence> evidence) {
+            this(projectId, title, snapshotVersion, answers, evidence, List.of(), List.of());
+        }
     }
 
-    record Answer(Long messageId, InterviewField field, String content) {
+    /** One answered question, oldest first in {@link Context#turns()}. */
+    record PreviousTurn(InterviewField field, String question, String answer) {
+    }
+
+    record AskedQuestion(InterviewField field, String content) {
+    }
+
+    /** question: text of the question this answers (null when unknown); used to recognise closing prompts. */
+    record Answer(Long messageId, InterviewField field, String content, String question) {
+        public Answer(Long messageId, InterviewField field, String content) {
+            this(messageId, field, content, null);
+        }
     }
 
     record Evidence(String sourceId, MaterialType type, String title, String description, String usedAi) {

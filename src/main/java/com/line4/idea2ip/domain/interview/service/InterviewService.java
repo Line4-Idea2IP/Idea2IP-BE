@@ -17,8 +17,10 @@ import com.line4.idea2ip.domain.project.entity.ProjectInputChange.Type;
 import com.line4.idea2ip.global.exception.BaseException;
 import com.line4.idea2ip.integration.ai.AiInterviewClient;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Answer;
+import com.line4.idea2ip.integration.ai.AiInterviewClient.AskedQuestion;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Context;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Evidence;
+import com.line4.idea2ip.integration.ai.AiInterviewClient.PreviousTurn;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.QuestionDraft;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -166,12 +168,8 @@ public class InterviewService {
                 return new AdvancePlan(state(projectId, interview, last), null, null, List.of());
             }
 
-            List<Answer> answers = messages.findAllByInterview_InterviewIdOrderBySequenceNo(interview.getInterviewId())
-                    .stream()
-                    .filter(message -> message.getRole() == USER)
-                    .map(this::toAnswer)
-                    .toList();
-            return new AdvancePlan(null, context(project, answers, readiness.materials(projectId)),
+            var history = messages.findAllByInterview_InterviewIdOrderBySequenceNo(interview.getInterviewId());
+            return new AdvancePlan(null, context(project, history, readiness.materials(projectId)),
                     toAnswer(last), List.copyOf(interview.getFieldStates()));
         });
         if (plan.state() != null) {
@@ -231,14 +229,23 @@ public class InterviewService {
                 interview.getFieldStates(), question, pending);
     }
 
-    private Context context(Project project, List<Answer> answers, List<CreativeMaterial> materials) {
+    private Context context(Project project, List<InterviewMessage> history, List<CreativeMaterial> materials) {
+        var answers = history.stream().filter(message -> message.getRole() == USER).map(this::toAnswer).toList();
+        var questions = history.stream().filter(message -> message.getRole() == ASSISTANT)
+                .map(message -> new AskedQuestion(message.getTargetField(), message.getContent())).toList();
         List<Evidence> evidence = materials.stream()
                 .flatMap(material -> material.getFiles().stream().map(file ->
                         new Evidence(InterviewReadinessService.reference(material, file).sourceId(),
                                 material.getMaterialType(), material.getTitle(), material.getDescription(),
                                 material.getUsedAi())))
                 .toList();
-        return new Context(project.getProjectId(), project.getTitle(), UUID.randomUUID().toString(), answers, evidence);
+        // Every answered question, so a new field can build on related answers from several turns back.
+        var turns = history.stream().filter(message -> message.getRole() == USER && message.getReplyToQuestion() != null)
+                .map(answer -> new PreviousTurn(answer.getReplyToQuestion().getTargetField(),
+                        answer.getReplyToQuestion().getContent(), answer.getContent()))
+                .toList();
+        return new Context(project.getProjectId(), project.getTitle(), UUID.randomUUID().toString(),
+                answers, evidence, questions, turns);
     }
 
     private QuestionDraft generateQuestion(Context context, InterviewField target) {
@@ -289,7 +296,9 @@ public class InterviewService {
     }
 
     private Answer toAnswer(InterviewMessage message) {
-        return new Answer(message.getMessageId(), message.getTargetField(), message.getContent());
+        var question = message.getReplyToQuestion();
+        return new Answer(message.getMessageId(), message.getTargetField(), message.getContent(),
+                question == null ? null : question.getContent());
     }
 
     private Message toMessage(InterviewMessage message) {
