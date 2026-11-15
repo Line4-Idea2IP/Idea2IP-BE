@@ -1,0 +1,142 @@
+{
+  "defaults": {
+    "project": {
+      "title": "사과와 은빛 음료 캔",
+      "description": "붉은 사과 단면과 은빛 음료 캔, 여러 색의 곡선으로 구성한 디지털 일러스트입니다. 인터뷰 답변은 기능 검증용 가상 진술입니다.",
+      "artworkType": "DIGITAL_ILLUSTRATION"
+    },
+    "artwork": {
+      "title": "사과와 은빛 음료 캔",
+      "description": "붉은 사과 단면과 은빛 음료 캔, 여러 색의 곡선이 보이는 최종 작품입니다."
+    },
+    "materials": [
+      {
+        "materialType": "AI_ASSISTED",
+        "title": "사과와 캔 배치 비교 시안",
+        "description": "사과와 음료 캔의 배치를 비교한 테스트 자료입니다. 첨부 파일은 테스트용 이미지입니다."
+      },
+      {
+        "materialType": "MANUAL_EDIT",
+        "title": "캔 뚜껑 색 수정 전후 자료",
+        "description": "캔 뚜껑 테두리 색을 바꾸기 전후를 비교한 테스트 자료입니다. 첨부 파일은 테스트용 이미지입니다."
+      }
+    ],
+    "answers": {
+      "AI_TOOL": ["Stable Diffusion을 사용했습니다."],
+      "AI_PURPOSE": [
+        "초안 단계에서 사과 조각과 음료 캔의 위치를 바꿔 보며 대각선 구도와 원형 구도의 차이를 비교하려고 사용했습니다.",
+        "초안에서 사과와 음료 캔의 배치 후보를 만드는 데 사용했습니다."
+      ],
+      "AI_OUTPUT_USAGE": [
+        "AI 시안은 배치 후보를 비교하는 데만 참고했습니다. 생성 이미지는 작품에 넣지 않았습니다.",
+        "사과와 캔을 대각선으로 배치하는 아이디어만 참고했고 AI 이미지 자체는 사용하지 않았습니다."
+      ],
+      "HUMAN_CREATED_ELEMENT": [
+        "사과 단면과 사과 뒤의 녹색 곡선을 직접 그렸습니다. 연필로 조각의 외곽선을 잡고 얇은 붓으로 과육의 밝은 층을 그렸습니다.",
+        "자른 사과의 겹치는 외곽선과 뒤쪽 곡선을 직접 그렸습니다. 밝은 과육이 보이게 곡선의 간격을 다르게 뒀습니다.",
+        "새로 그린 요소는 사과 단면과 뒤쪽 곡선입니다."
+      ],
+      "HUMAN_EDITED_EXPRESSION": [
+        "하단 캔 뚜껑 테두리를 회색에서 청회색으로 바꾸고 흰색을 얇게 덧칠했습니다.",
+        "캔의 테두리를 어둡게 하고 중심부 반사광은 밝게 칠해 명암을 분리했습니다.",
+        "캔의 색과 명암을 조정한 것 외에는 추가 수정 작업이 없습니다."
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "typo-full",
+      "title": "오타 섞인 첫 답변에 도구·목적·활용 여부가 모두 있음",
+      "phase": 0,
+      "answers": {
+        "AI_TOOL": ["스테이블 디퓨젼 썻어여. 사과랑 캔 배치 비교용으로만 썻구, 생성 이미지는 최종작품에 안 넣엇어요."],
+        "HUMAN_EDITED_EXPRESSION": [
+          "하단 캔뚜껑 테두리를 회색애서 청회색으루 바궛고 흰색을 얇게 덧칠햇어요.",
+          "캔의 테두리를 어둡게 하고 중심부 반사광은 밝게 칠해 명암을 분리했습니다."
+        ]
+      },
+      "mustSkip": ["AI_PURPOSE", "AI_OUTPUT_USAGE"],
+      "mustAsk": ["HUMAN_CREATED_ELEMENT", "HUMAN_EDITED_EXPRESSION"],
+      "expectFinal": {"AI_PURPOSE": ["COMPLETED"], "AI_OUTPUT_USAGE": ["COMPLETED"]}
+    },
+    {
+      "id": "purpose-only",
+      "title": "첫 답변에 도구와 사용 목적만 있음",
+      "phase": 0,
+      "answers": {
+        "AI_TOOL": ["Adobe Firefly를 사용했습니다. 초안 단계에서 사과와 음료 캔의 대각선 구도와 원형 구도를 비교하려고 사용했습니다."]
+      },
+      "mustSkip": ["AI_PURPOSE"],
+      "mustAsk": ["AI_OUTPUT_USAGE", "HUMAN_CREATED_ELEMENT", "HUMAN_EDITED_EXPRESSION"],
+      "expectFinal": {"AI_PURPOSE": ["COMPLETED"]}
+    },
+    {
+      "id": "all-in-one",
+      "title": "첫 답변에 다섯 항목이 모두 있음",
+      "phase": 0,
+      "answers": {
+        "AI_TOOL": ["Adobe Firefly를 사용했습니다. 초안 단계에서 사과와 음료 캔의 대각선 구도와 원형 구도를 비교하려고 사용했습니다. AI 이미지 자체는 최종 작품에 넣지 않았고 배치 아이디어만 참고했습니다. 사과 단면은 연필로 윤곽을 잡고 얇은 붓으로 밝은 과육을 직접 그렸습니다. 캔 뚜껑 테두리는 회색에서 청회색으로 바꾸고 반사광에는 흰색을 덧칠했습니다."]
+      },
+      "mustSkip": ["AI_PURPOSE", "AI_OUTPUT_USAGE", "HUMAN_CREATED_ELEMENT", "HUMAN_EDITED_EXPRESSION"],
+      "mustAsk": [],
+      "expectFinal": {
+        "AI_PURPOSE": ["COMPLETED"], "AI_OUTPUT_USAGE": ["COMPLETED"],
+        "HUMAN_CREATED_ELEMENT": ["COMPLETED"], "HUMAN_EDITED_EXPRESSION": ["COMPLETED"]
+      }
+    },
+    {
+      "id": "no-ai-typo",
+      "title": "AI 미사용을 오타로 답함",
+      "phase": 0,
+      "materials": [
+        {
+          "materialType": "MANUAL_EDIT",
+          "title": "캔 뚜껑 색 수정 전후 자료",
+          "description": "캔 뚜껑 테두리 색을 바꾸기 전후를 비교한 테스트 자료입니다. 첨부 파일은 테스트용 이미지입니다."
+        }
+      ],
+      "answers": {"AI_TOOL": ["없슴"]},
+      "mustSkip": ["AI_PURPOSE", "AI_OUTPUT_USAGE"],
+      "mustAsk": ["HUMAN_CREATED_ELEMENT", "HUMAN_EDITED_EXPRESSION"],
+      "expectFinal": {"AI_TOOL": ["NOT_APPLICABLE"], "AI_PURPOSE": ["NOT_APPLICABLE"], "AI_OUTPUT_USAGE": ["NOT_APPLICABLE"]}
+    },
+    {
+      "id": "no-ai-initials",
+      "title": "AI 미사용을 초성으로 답함",
+      "phase": 0,
+      "materials": [
+        {
+          "materialType": "MANUAL_EDIT",
+          "title": "캔 뚜껑 색 수정 전후 자료",
+          "description": "캔 뚜껑 테두리 색을 바꾸기 전후를 비교한 테스트 자료입니다. 첨부 파일은 테스트용 이미지입니다."
+        }
+      ],
+      "answers": {"AI_TOOL": ["ㄴㄴ"]},
+      "mustSkip": ["AI_PURPOSE", "AI_OUTPUT_USAGE"],
+      "mustAsk": ["HUMAN_CREATED_ELEMENT", "HUMAN_EDITED_EXPRESSION"],
+      "expectFinal": {"AI_TOOL": ["NOT_APPLICABLE"], "AI_PURPOSE": ["NOT_APPLICABLE"], "AI_OUTPUT_USAGE": ["NOT_APPLICABLE"]}
+    },
+    {
+      "id": "unreadable",
+      "title": "첫 답변을 알아볼 수 없음",
+      "phase": 0,
+      "answers": {"AI_TOOL": ["ㅁㄹ... ㅅㅈ ㅇㄱ? ㅠ", "Stable Diffusion을 사용했습니다."]},
+      "mustSkip": [],
+      "mustAsk": ["AI_TOOL"],
+      "minAsks": {"AI_TOOL": 2}
+    },
+    {
+      "id": "artwork-description",
+      "title": "최종 작품 설명에 도구와 사용 목적이 적혀 있음",
+      "phase": 3,
+      "artwork": {
+        "title": "사과와 은빛 음료 캔",
+        "description": "Midjourney로 사과와 캔의 배치 시안을 여러 개 만들어 구도를 비교한 뒤, 사과 단면과 곡선은 직접 다시 그린 디지털 일러스트입니다."
+      },
+      "answers": {},
+      "mustSkip": ["AI_TOOL", "AI_PURPOSE"],
+      "mustAsk": ["AI_OUTPUT_USAGE", "HUMAN_EDITED_EXPRESSION"],
+      "expectReadiness": {"AI_TOOL": ["COMPLETED"], "AI_PURPOSE": ["COMPLETED"]}
+    }
+  ]
+}
