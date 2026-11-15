@@ -196,7 +196,7 @@ public class InterviewService {
     }
 
     private AdvancePlan evaluateAndStore(Long userId, Long projectId, AdvancePlan plan) {
-        var analysis = callAi(() -> ai.evaluate(plan.context(), plan.answer()));
+        var analysis = callAi("answer-evaluation", plan.answer().field(), () -> ai.evaluate(plan.context(), plan.answer()));
         InterviewFieldState evaluation = analysis == null ? null : analysis.state();
         if (evaluation == null || evaluation.field() != plan.answer().field() || evaluation.status() == null) {
             throw new BaseException(INTERVIEW_AI_UNAVAILABLE);
@@ -280,7 +280,7 @@ public class InterviewService {
     }
 
     private QuestionDraft generateQuestion(Context context, InterviewField target, String clarification) {
-        QuestionDraft question = callAi(() -> ai.generateQuestion(context, target, clarification));
+        QuestionDraft question = callAi("question-generation", target, () -> ai.generateQuestion(context, target, clarification));
         if (question == null || !StringUtils.hasText(question.content()) || question.content().length() > 500
                 || (question.reason() != null && question.reason().length() > 500) || question.sourceIds() == null) {
             throw new BaseException(INTERVIEW_AI_UNAVAILABLE);
@@ -293,11 +293,11 @@ public class InterviewService {
         return question;
     }
 
-    private <T> T callAi(Supplier<T> call) {
+    private <T> T callAi(String phase, InterviewField field, Supplier<T> call) {
         try {
             return call.get();
         } catch (RuntimeException exception) {
-            log.warn("Interview question generation or evaluation failed: {}", exception.getClass().getSimpleName());
+            log.warn("Interview AI failed: phase={} field={} error={}", phase, field, exception.getClass().getSimpleName());
             throw new BaseException(INTERVIEW_AI_UNAVAILABLE);
         }
     }
