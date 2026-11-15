@@ -329,7 +329,8 @@ public class InterviewService {
     private Answer toAnswer(InterviewMessage message) {
         var question = message.getReplyToQuestion();
         return new Answer(message.getMessageId(), message.getTargetField(), message.getContent(),
-                question == null ? null : question.getContent(), message.getValidatedEvidenceQuote());
+                question == null ? null : question.getContent(), message.getValidatedEvidenceQuote(),
+                question == null ? null : question.getReason());
     }
 
     private Message toMessage(InterviewMessage message) {
