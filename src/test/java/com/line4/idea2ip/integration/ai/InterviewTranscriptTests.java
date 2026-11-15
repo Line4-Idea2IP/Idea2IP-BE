@@ -52,9 +52,9 @@ class InterviewTranscriptTests {
 
     @Test void anUnclearNoAiAnswerIsConfirmedBeforeSkippingAiQuestions() {
         var base = MockAiInterviewClient.baseQuestion(AI_TOOL);
-        var typo = new Answer(1L, AI_TOOL, "업슴", base);
+        var typo = new Answer(1L, AI_TOOL, "ㄴㄴ", base);
         var afterTypo = new Context(1L, "작품", "s", List.of(typo), List.of(),
-                List.of(new AskedQuestion(AI_TOOL, base)), List.of(new PreviousTurn(AI_TOOL, base, "업슴")));
+                List.of(new AskedQuestion(AI_TOOL, base)), List.of(new PreviousTurn(AI_TOOL, base, "ㄴㄴ")));
         var mock = new MockAiInterviewClient();
         // Not a tool name and not yet "no AI": the field stays open for one confirmation.
         assertEquals(NEEDS_REVIEW, mock.analyzeAnswer(afterTypo, typo).status());
@@ -89,11 +89,13 @@ class InterviewTranscriptTests {
 
     @Test void aClearNoAiAnswerSettlesTheToolAtOnce() {
         var base = MockAiInterviewClient.baseQuestion(AI_TOOL);
-        for (String text : List.of("AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀")) {
+        for (String text : List.of("AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀", "업슴", "없슴")) {
             var answer = new Answer(1L, AI_TOOL, text, base);
-            var state = new MockAiInterviewClient().analyzeAnswer(
-                    new Context(1L, "작품", "s", List.of(answer), List.of()), answer);
-            assertEquals(NOT_APPLICABLE, state.status(), text);
+            var context = new Context(1L, "작품", "s", List.of(answer), List.of());
+            // The live client applies the same rule; the closed port proves no model is called.
+            for (AiInterviewClient client : List.of(new MockAiInterviewClient(), offlineLiveClient())) {
+                assertEquals(NOT_APPLICABLE, client.analyzeAnswer(context, answer).status(), text);
+            }
         }
         // A bare "네" names no tool; it is not saved as one.
         var yes = new Answer(1L, AI_TOOL, "네", base);

@@ -8,9 +8,10 @@ import java.util.regex.Pattern;
  * Reads answers to the AI tool question that say no AI was used. The answer text is never changed; these checks only
  * decide whether it settles the field, needs a confirmation, or can be offered as a tool name.
  * <ul>
- *     <li>clear: "AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀" settle the field as not applicable.</li>
- *     <li>unclear: "업슴", "ㄴㄴ", "아니요" probably mean the same but are confirmed first, because a not-applicable
- *     AI tool also skips the AI purpose and output questions.</li>
+ *     <li>clear: "AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀", and misspellings of "없음" such as "업슴"
+ *     settle the field as not applicable.</li>
+ *     <li>unclear: "ㄴㄴ", "x", "아니요" probably mean the same but are confirmed first, because a not-applicable
+ *     AI tool also skips the AI purpose and output questions. A bare "no" can also deny something else.</li>
  * </ul>
  */
 public final class NoAiAnswer {
@@ -18,11 +19,13 @@ public final class NoAiAnswer {
     private static final Pattern SPACES = Pattern.compile("\\s+");
     // "AI 도구는", "툴을": the subject of a short "none" answer ("AI 도구는 없어요").
     private static final Pattern TOOL_PREFIX = Pattern.compile("^(?:(?:생성형)?ai|에이아이)?(?:도구|툴|프로그램)?[은는이가을를]?");
+    // "없음" and its misspellings: the word is unmistakable even when typed wrong ("업슴", "없슴", "업어요").
     private static final Set<String> NONE = Set.of("해당없음", "없음", "없어요", "없습니다", "없다", "없어", "없었어요",
-            "없었습니다", "없음요");
-    private static final Set<String> UNCLEAR_NONE = Set.of("업슴", "업음", "없슴", "엄슴", "읍슴", "업어요", "업서요",
-            "없서요", "업습니다", "업슴니다", "없슴다", "없슴니다", "없어여", "없어용", "없음다", "없습니당", "업", "없",
-            "해당업음", "해당없슴", "해당업슴", "무", "x", "ㄴㄴ", "ㄴ", "노", "노노", "no", "none", "n/a", "na");
+            "없었습니다", "없음요", "업슴", "업음", "없슴", "엄슴", "읍슴", "업어요", "업서요", "없서요", "업습니다",
+            "업슴니다", "없슴다", "없슴니다", "없어여", "없어용", "없음다", "없습니당", "해당업음", "해당없슴", "해당업슴",
+            "none", "n/a");
+    // Too short or too general to settle the field without asking: a cut-off word, a symbol, a bare "no".
+    private static final Set<String> UNCLEAR_NONE = Set.of("업", "없", "무", "x", "ㄴㄴ", "ㄴ", "노", "노노", "no", "na");
     private static final Set<String> NO = Set.of("아니요", "아뇨", "아니오", "아니", "아니에요", "아닙니다", "아님", "ㄴㄴ",
             "노", "노노", "no", "nope");
     private static final Set<String> YES = Set.of("네", "예", "넵", "넹", "녜", "응", "웅", "ㅇㅇ", "ㅇ", "맞아요", "맞아",
