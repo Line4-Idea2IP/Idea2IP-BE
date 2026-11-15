@@ -19,6 +19,14 @@ public interface AiInterviewClient {
         return generateQuestion(context, field);
     }
 
+    /**
+     * Settles a field not asked yet when answers to other fields already answered it, so the interview does not
+     * ask for it again. The summary is the user's own words from that earlier answer; null keeps asking the field.
+     */
+    default InterviewFieldState settleFromHistory(Context context, InterviewField field) {
+        return null;
+    }
+
     /** A null evidence quote leaves legacy/mock source handling in place; empty marks a live reply with no source. */
     record AnswerAnalysis(InterviewFieldState state, String evidenceQuote, String clarification) {}
 

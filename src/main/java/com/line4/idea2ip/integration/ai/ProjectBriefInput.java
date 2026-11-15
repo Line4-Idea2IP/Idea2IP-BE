@@ -3,6 +3,8 @@ package com.line4.idea2ip.integration.ai;
 import com.line4.idea2ip.domain.artwork.entity.FinalArtwork;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.interview.entity.InterviewField;
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Status;
+import com.line4.idea2ip.domain.interview.entity.InterviewMessage;
 import com.line4.idea2ip.domain.interview.entity.InterviewMessage.Role;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
 import com.line4.idea2ip.domain.interview.repository.InterviewMessageRepository;
@@ -19,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -58,6 +61,24 @@ public class ProjectBriefInput {
                 sources.add(new Source("answer:" + message.getMessageId(), "USER_STATEMENT", locator,
                         quote == null ? message.getContent() : quote, field(message.getTargetField()), locator, materialId, null,
                         message.getMessageId(), null, quote == null ? null : true));
+            }
+            var answeredFields = history.stream().filter(message -> message.getRole() == Role.USER)
+                    .map(InterviewMessage::getTargetField).collect(Collectors.toSet());
+            // A field completed from an answer to another field has no answer of its own. Its summary is a span of
+            // that earlier answer, so the answer is cited again under the field it settled.
+            for (var state : interview.getFieldStates()) {
+                if (state.status() != Status.COMPLETED || state.summary() == null || state.summary().isBlank()
+                        || answeredFields.contains(state.field())) continue;
+                history.stream().filter(message -> message.getRole() == Role.USER
+                                && message.getContent().contains(state.summary()))
+                        .findFirst().ifPresent(message -> {
+                            String locator = "인터뷰 답변 " + message.getSequenceNo() + " (" + state.field() + ")";
+                            Long materialId = linkedMaterial(message.getReplyToQuestion().getSourceIds(),
+                                    state.field(), materialTypes);
+                            sources.add(new Source("answer:" + message.getMessageId() + ":" + state.field(),
+                                    "USER_STATEMENT", locator, state.summary(), field(state.field()), locator,
+                                    materialId, null, message.getMessageId(), null, true));
+                        });
             }
         });
         return new Input(projectId.toString(), project.getTitle(), "project-" + projectId + "-r" + project.getInputRevision(),

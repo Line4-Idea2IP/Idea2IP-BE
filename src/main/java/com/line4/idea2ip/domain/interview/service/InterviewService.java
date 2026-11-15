@@ -177,10 +177,11 @@ public class InterviewService {
         }
 
         Long answerId = evaluated.answer().messageId();
-        InterviewField target = nextField(evaluated.fields());
+        var fields = settleCovered(evaluated.context(), evaluated.answer().field(), evaluated.fields());
+        InterviewField target = nextField(fields);
         String clarification = target == evaluated.answer().field()
                 && StringUtils.hasText(evaluated.evaluationClarification()) ? evaluated.evaluationClarification() : null;
-        QuestionDraft question = generateQuestion(evaluated.context(), target, clarification);
+        QuestionDraft question = target == null ? null : generateQuestion(evaluated.context(), target, clarification);
 
         return transaction.execute(status -> {
             projects.getOwnedProjectForUpdate(userId, projectId);
@@ -189,10 +190,49 @@ public class InterviewService {
             if (!isPending(interview, last, answerId)) {
                 return state(projectId, interview, last);
             }
+            if (!fields.equals(interview.getFieldStates())) {
+                interview.updateFields(fields);
+            }
+            if (target == null) {
+                return state(projectId, interview, last);
+            }
 
             var saved = saveQuestion(interview, last.getSequenceNo() + 1, target, question);
             return state(projectId, interview, saved);
         });
+    }
+
+    /**
+     * Fields the earlier answers already answered are completed instead of asked: a user who said "생성 이미지는
+     * 최종 작품에 안 넣었어요" while naming the tool is not asked whether the output was used. Only fields never
+     * asked are settled, so a field the user is answering again keeps its own evaluation; a failed check only
+     * means the field is asked as usual.
+     */
+    private List<InterviewFieldState> settleCovered(Context context, InterviewField answered,
+                                                    List<InterviewFieldState> fields) {
+        var result = fields;
+        for (InterviewField target = nextField(result); target != null && target != answered && notAsked(context, target);
+             target = nextField(result)) {
+            InterviewFieldState settled = settleFromHistory(context, target);
+            if (settled == null || settled.field() != target || settled.status() != InterviewFieldState.Status.COMPLETED) {
+                break;
+            }
+            result = InterviewProgress.apply(result, settled, List.of());
+        }
+        return result;
+    }
+
+    private InterviewFieldState settleFromHistory(Context context, InterviewField field) {
+        try {
+            return ai.settleFromHistory(context, field);
+        } catch (RuntimeException exception) {
+            log.warn("Interview AI failed: phase=coverage field={} error={}", field, exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private static boolean notAsked(Context context, InterviewField field) {
+        return context.questions().stream().noneMatch(question -> question.field() == field);
     }
 
     private AdvancePlan evaluateAndStore(Long userId, Long projectId, AdvancePlan plan) {
