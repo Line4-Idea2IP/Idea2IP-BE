@@ -89,7 +89,7 @@ class InterviewTranscriptTests {
 
     @Test void aClearNoAiAnswerSettlesTheToolAtOnce() {
         var base = MockAiInterviewClient.baseQuestion(AI_TOOL);
-        for (String text : List.of("AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀", "업슴", "없슴")) {
+        for (String text : List.of("AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀", "없음")) {
             var answer = new Answer(1L, AI_TOOL, text, base);
             var context = new Context(1L, "작품", "s", List.of(answer), List.of());
             // The live client applies the same rule; the closed port proves no model is called.

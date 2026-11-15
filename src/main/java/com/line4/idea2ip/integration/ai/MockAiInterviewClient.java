@@ -115,6 +115,8 @@ class MockAiInterviewClient implements AiInterviewClient {
             }
             // "아니요": AI was used after all, so ask for the tool's name again.
             if (NoAiAnswer.denies(text)) return new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW, text);
+            // "챗GPT는 안 썼어요": neither a yes nor a tool name, so the tool name is asked for again.
+            if (NoAiAnswer.notAToolName(text)) return new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW, text);
             return null;
         }
         boolean noneLike = InterviewFieldState.isNotApplicableAnswer(text) || NoAiAnswer.clearlyNone(text)

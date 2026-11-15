@@ -288,6 +288,8 @@ final class InterviewQuestions {
             "AI 도구를 사용하지 않았다는 뜻인가요? 맞다면 ‘네’라고, 사용했다면 도구 이름을 알려주세요.";
     static final String NO_AI_CONFIRMATION_REASON = "AI 도구를 사용하지 않았는지 확인합니다.";
     static final String NO_AI_CONFIRMED = "AI 도구를 사용하지 않았다고 확인했습니다.";
+    // Settled from the answer in context, without the confirmation question: kept apart from a confirmed "no AI".
+    static final String NO_AI_JUDGED = "AI 도구를 사용하지 않았다는 답변으로 판단했습니다.";
 
     static boolean isNoAiConfirmation(String question) {
         return question != null && normalize(question).equals(normalize(NO_AI_CONFIRMATION));

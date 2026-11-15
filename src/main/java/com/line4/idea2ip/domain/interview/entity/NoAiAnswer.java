@@ -8,10 +8,10 @@ import java.util.regex.Pattern;
  * Reads answers to the AI tool question that say no AI was used. The answer text is never changed; these checks only
  * decide whether it settles the field, needs a confirmation, or can be offered as a tool name.
  * <ul>
- *     <li>clear: "AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀", and misspellings of "없음" such as "업슴"
- *     settle the field as not applicable.</li>
- *     <li>unclear: "ㄴㄴ", "x", "아니요" probably mean the same but are confirmed first, because a not-applicable
- *     AI tool also skips the AI purpose and output questions. A bare "no" can also deny something else.</li>
+ *     <li>clear: "없음", "AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀" settle the field as not applicable.</li>
+ *     <li>unclear: misspellings ("업슴", "없슴"), slang ("ㄴㄴ"), a bare "아니요", or one tool denied ("챗GPT는 안
+ *     썼어요") may mean no AI at all, but are judged in context (the live model) or confirmed with the user first,
+ *     because a not-applicable AI tool also skips the AI purpose and output questions.</li>
  * </ul>
  */
 public final class NoAiAnswer {
@@ -19,13 +19,17 @@ public final class NoAiAnswer {
     private static final Pattern SPACES = Pattern.compile("\\s+");
     // "AI 도구는", "툴을": the subject of a short "none" answer ("AI 도구는 없어요").
     private static final Pattern TOOL_PREFIX = Pattern.compile("^(?:(?:생성형)?ai|에이아이)?(?:도구|툴|프로그램)?[은는이가을를]?");
-    // "없음" and its misspellings: the word is unmistakable even when typed wrong ("업슴", "없슴", "업어요").
     private static final Set<String> NONE = Set.of("해당없음", "없음", "없어요", "없습니다", "없다", "없어", "없었어요",
-            "없었습니다", "없음요", "업슴", "업음", "없슴", "엄슴", "읍슴", "업어요", "업서요", "없서요", "업습니다",
-            "업슴니다", "없슴다", "없슴니다", "없어여", "없어용", "없음다", "없습니당", "해당업음", "해당없슴", "해당업슴",
-            "none", "n/a");
-    // Too short or too general to settle the field without asking: a cut-off word, a symbol, a bare "no".
-    private static final Set<String> UNCLEAR_NONE = Set.of("업", "없", "무", "x", "ㄴㄴ", "ㄴ", "노", "노노", "no", "na");
+            "없었습니다", "없음요", "none", "n/a");
+    // Misspellings, cut-off words, symbols: probably "none", judged in context before settling the field.
+    private static final Set<String> UNCLEAR_NONE = Set.of("업슴", "업음", "없슴", "엄슴", "읍슴", "업어요", "업서요",
+            "없서요", "업습니다", "업슴니다", "없슴다", "없슴니다", "없어여", "없어용", "없음다", "없습니당", "해당업음",
+            "해당없슴", "해당업슴", "업", "없", "무", "x", "ㄴㄴ", "ㄴ", "노", "노노", "no", "na");
+    // What may come before a general "안 썼어요": the speaker, "AI (도구)" and an adverb. Anything else, such as
+    // "챗GPT는", names one tool, and another may still have been used.
+    private static final Pattern GENERAL_SUBJECT = Pattern.compile(
+            "(?:저는|제가|나는|전|저희는)?(?:(?:생성형)?ai|에이아이)?(?:도구|툴|프로그램|서비스)?[은는이가을를도]?"
+                    + "(?:전혀|따로|딱히|별도로|아예|일절|하나도)?");
     private static final Set<String> NO = Set.of("아니요", "아뇨", "아니오", "아니", "아니에요", "아닙니다", "아님", "ㄴㄴ",
             "노", "노노", "no", "nope");
     private static final Set<String> YES = Set.of("네", "예", "넵", "넹", "녜", "응", "웅", "ㅇㅇ", "ㅇ", "맞아요", "맞아",
@@ -45,15 +49,22 @@ public final class NoAiAnswer {
         String text = compact(answer);
         if (text.isEmpty()) return false;
         if (NONE.contains(text) || NONE.contains(withoutToolPrefix(text))) return true;
-        if (!NOT_USED.matcher(text).find()) return false;
-        return !USED.matcher(NOT_USED.matcher(text).replaceAll("")).find();
+        if (!negatesUse(text)) return false;
+        var negation = NOT_USED.matcher(text);
+        return negation.find() && GENERAL_SUBJECT.matcher(text.substring(0, negation.start())).matches();
+    }
+
+    /** "안 썼어요" with no use left once the negations are removed ("미드저니는 썼고 챗GPT는 안 썼어요" names a tool). */
+    private static boolean negatesUse(String text) {
+        return NOT_USED.matcher(text).find() && !USED.matcher(NOT_USED.matcher(text).replaceAll("")).find();
     }
 
     /** Probably says no AI tool was used, but in a way to confirm before settling the field. */
     public static boolean unclearNone(String answer) {
         String text = compact(answer);
         if (text.isEmpty() || clearlyNone(answer)) return false;
-        return UNCLEAR_NONE.contains(text) || UNCLEAR_NONE.contains(withoutToolPrefix(text)) || NO.contains(text);
+        return UNCLEAR_NONE.contains(text) || UNCLEAR_NONE.contains(withoutToolPrefix(text)) || NO.contains(text)
+                || negatesUse(text);
     }
 
     /** Agrees with "AI 도구를 사용하지 않았다는 뜻인가요?". */

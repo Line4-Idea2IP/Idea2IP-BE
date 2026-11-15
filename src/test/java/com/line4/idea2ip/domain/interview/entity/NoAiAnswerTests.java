@@ -10,15 +10,16 @@ class NoAiAnswerTests {
     @Test void plainNoAiAnswersAreClear() {
         for (String answer : List.of("AI 도구를 사용하지 않았어요.", "사용 안 함", "안 썼어요", "AI 안 씀", "미사용",
                 "AI는 쓰지 않았습니다", "사용한 적 없어요", "AI 도구는 없어요", "없음", "없다", "AI는 안 쓰고 직접 그렸어요",
-                // Misspellings of "없음" are settled by rule, without a model or a confirmation question.
-                "업슴", "없슴.", "업어요", "도구 업슴", "해당 업음")) {
+                "AI는 전혀 사용하지 않았어요", "저는 AI를 안 썼어요")) {
             assertTrue(NoAiAnswer.clearlyNone(answer), answer);
             assertFalse(NoAiAnswer.unclearNone(answer), answer);
         }
     }
 
-    @Test void bareNoAndSymbolsAreConfirmedFirst() {
-        for (String answer : List.of("ㄴㄴ", "아니요", "x", "no", "없", "도구 ㄴㄴ")) {
+    @Test void typosSlangAndOneToolDenialsAreNotSettledByRule() {
+        // Judged in context (the live model) or confirmed with the user before the field is settled.
+        for (String answer : List.of("업슴", "없슴.", "업어요", "도구 업슴", "해당 업음", "ㄴㄴ", "아니요", "x", "no", "없",
+                "도구 ㄴㄴ", "챗GPT는 안 썼어요", "미드저니는 사용하지 않았습니다")) {
             assertTrue(NoAiAnswer.unclearNone(answer), answer);
             assertFalse(NoAiAnswer.clearlyNone(answer), answer);
         }
