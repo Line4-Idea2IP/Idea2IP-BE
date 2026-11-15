@@ -77,6 +77,21 @@ class LlamaCoveredFieldTests {
         assertEquals(TOOL_ANSWER, inputs.getFirst().path("history").path(0).path("answer").asString());
     }
 
+    @Test void anAllInOneToolAnswerAlsoSettlesTheHumanFieldsWithTheirOwnSentences() throws IOException {
+        String allInOne = "Adobe Firefly를 사용했습니다. AI 이미지 자체는 최종 작품에 넣지 않았습니다. "
+                + "사과 단면은 연필로 윤곽을 잡고 얇은 붓으로 밝은 과육을 직접 그렸습니다. "
+                + "캔 뚜껑 테두리는 회색에서 청회색으로 바꾸고 반사광에는 흰색을 덧칠했습니다.";
+        var context = new Context(1L, "사과와 캔", "s",
+                List.of(new Answer(1L, AI_TOOL, allInOne, TOOL_QUESTION, "Adobe Firefly")), List.of(),
+                List.of(new AskedQuestion(AI_TOOL, TOOL_QUESTION)),
+                List.of(new PreviousTurn(AI_TOOL, TOOL_QUESTION, allInOne)));
+        String edit = "캔 뚜껑 테두리는 회색에서 청회색으로 바꾸고 반사광에는 흰색을 덧칠했습니다";
+
+        var state = client(coverage("COVERED", edit)).settleFromHistory(context, HUMAN_EDITED_EXPRESSION);
+
+        assertEquals(new InterviewFieldState(HUMAN_EDITED_EXPRESSION, COMPLETED, edit), state);
+    }
+
     @Test void aFieldTheEarlierAnswersDoNotCoverIsStillAsked() throws IOException {
         assertNull(client(coverage("NOT_COVERED", "")).settleFromHistory(afterToolAnswer(), HUMAN_CREATED_ELEMENT));
     }
