@@ -61,6 +61,19 @@ class ContributionProposalTests {
         assertTrue(proposals(input(tool, purpose), List.of()).isEmpty());
     }
 
+    @Test void confirmedNoAiAnswersAreNotProposedAsTools() {
+        // "업슴" then "네" to the confirmation: both stay in the transcript, neither is a tool name.
+        var typo = answer(1, "AI_TOOL", "ai_usage", "업슴");
+        var yes = answer(2, "AI_TOOL", "ai_usage", "네");
+        var plain = answer(3, "AI_TOOL", "ai_usage", "AI 안 씀");
+        assertTrue(proposals(input(typo, yes, plain), List.of()).isEmpty());
+    }
+
+    @Test void namedToolsAreStillProposed() {
+        var tool = answer(1, "AI_TOOL", "ai_usage", "챗GPT는 안 썼고 미드저니를 사용했어요");
+        assertEquals(1, proposals(input(tool), List.of()).size());
+    }
+
     @Test void reviewedAnswerStaysOnItsDecidedStepWhenMaterialLinkChanges() {
         // The user excluded this edit while it was linked to material 5; a regenerated input links it to material 6.
         var oldStep = new ContributionStep(null, Kind.MATERIAL, 5L, "구도 참고 자료");

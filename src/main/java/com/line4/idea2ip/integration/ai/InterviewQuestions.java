@@ -2,6 +2,7 @@ package com.line4.idea2ip.integration.ai;
 
 import com.line4.idea2ip.domain.interview.entity.InterviewField;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
+import com.line4.idea2ip.domain.interview.entity.NoAiAnswer;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.AskedQuestion;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Context;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.PreviousTurn;
@@ -58,6 +59,11 @@ final class InterviewQuestions {
     /** As above, with the supplement quoting {@code previousAnswer} (the field's latest answer) when given. */
     static String followUp(InterviewField field, List<String> asked, Optional<InterviewSupplement> supplement,
                            String previousAnswer) {
+        if (field == InterviewField.AI_TOOL && NoAiAnswer.unclearNone(previousAnswer)
+                && !alreadyAsked(NO_AI_CONFIRMATION, asked)) {
+            // "업슴", "아니요": settling AI_TOOL as not applicable skips the other AI questions, so confirm it first.
+            return NO_AI_CONFIRMATION;
+        }
         if (supplement.isPresent()) {
             String question = supplement.get().questionFor(previousAnswer);
             if (!alreadyAsked(question, asked)) return question;
@@ -278,6 +284,14 @@ final class InterviewQuestions {
     }
 
     static final String CLOSING_REASON = "앞선 답변에 덧붙일 정보가 있는지 확인합니다.";
+    static final String NO_AI_CONFIRMATION =
+            "AI 도구를 사용하지 않았다는 뜻인가요? 맞다면 ‘네’라고, 사용했다면 도구 이름을 알려주세요.";
+    static final String NO_AI_CONFIRMATION_REASON = "AI 도구를 사용하지 않았는지 확인합니다.";
+    static final String NO_AI_CONFIRMED = "AI 도구를 사용하지 않았다고 확인했습니다.";
+
+    static boolean isNoAiConfirmation(String question) {
+        return question != null && normalize(question).equals(normalize(NO_AI_CONFIRMATION));
+    }
 
     /** Whether a question is one of the field's closing prompts, including numbered fallbacks. */
     static boolean isClosingQuestion(InterviewField field, String question) {

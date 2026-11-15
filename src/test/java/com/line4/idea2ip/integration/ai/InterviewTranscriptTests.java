@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.line4.idea2ip.domain.interview.entity.InterviewField.*;
+import static com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Status.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Replays the QA transcript of project 13 (questions and test answers stored in PostgreSQL). */
@@ -47,6 +48,57 @@ class InterviewTranscriptTests {
     private static LlamaInterviewClient offlineLiveClient() {
         return new LlamaInterviewClient("http://127.0.0.1:9/v1", "test-model", JsonMapper.builder().build(),
                 new MockAiInterviewClient());
+    }
+
+    @Test void anUnclearNoAiAnswerIsConfirmedBeforeSkippingAiQuestions() {
+        var base = MockAiInterviewClient.baseQuestion(AI_TOOL);
+        var typo = new Answer(1L, AI_TOOL, "업슴", base);
+        var afterTypo = new Context(1L, "작품", "s", List.of(typo), List.of(),
+                List.of(new AskedQuestion(AI_TOOL, base)), List.of(new PreviousTurn(AI_TOOL, base, "업슴")));
+        var mock = new MockAiInterviewClient();
+        // Not a tool name and not yet "no AI": the field stays open for one confirmation.
+        assertEquals(NEEDS_REVIEW, mock.analyzeAnswer(afterTypo, typo).status());
+        for (AiInterviewClient client : List.of(mock, offlineLiveClient())) {
+            var draft = client.generateQuestion(afterTypo, AI_TOOL);
+            assertEquals(InterviewQuestions.NO_AI_CONFIRMATION, draft.content());
+            assertEquals(InterviewQuestions.NO_AI_CONFIRMATION_REASON, draft.reason());
+        }
+
+        String confirm = InterviewQuestions.NO_AI_CONFIRMATION;
+        var asked = List.of(new AskedQuestion(AI_TOOL, base), new AskedQuestion(AI_TOOL, confirm));
+        var yes = new Answer(2L, AI_TOOL, "네", confirm);
+        var afterYes = new Context(1L, "작품", "s", List.of(typo, yes), List.of(), asked, List.of());
+        var settled = mock.analyzeAnswer(afterYes, yes);
+        assertEquals(NOT_APPLICABLE, settled.status());
+        assertEquals(InterviewQuestions.NO_AI_CONFIRMED, settled.summary());
+
+        // "아니요": AI was used, so the tool name is asked again (not the confirmation).
+        var no = new Answer(2L, AI_TOOL, "아니요", confirm);
+        var afterNo = new Context(1L, "작품", "s", List.of(typo, no), List.of(), asked, List.of());
+        assertEquals(NEEDS_REVIEW, mock.analyzeAnswer(afterNo, no).status());
+        for (AiInterviewClient client : List.of(mock, offlineLiveClient())) {
+            String next = client.generateQuestion(afterNo, AI_TOOL).content();
+            assertNotEquals(confirm, next);
+            assertFalse(InterviewQuestions.alreadyAsked(next, List.of(base, confirm)));
+        }
+        // A tool named in reply to the confirmation completes the field.
+        var named = new Answer(2L, AI_TOOL, "미드저니 썼어요", confirm);
+        assertEquals(COMPLETED, mock.analyzeAnswer(
+                new Context(1L, "작품", "s", List.of(typo, named), List.of(), asked, List.of()), named).status());
+    }
+
+    @Test void aClearNoAiAnswerSettlesTheToolAtOnce() {
+        var base = MockAiInterviewClient.baseQuestion(AI_TOOL);
+        for (String text : List.of("AI 도구를 사용하지 않았어요", "사용 안 함", "AI 안 씀")) {
+            var answer = new Answer(1L, AI_TOOL, text, base);
+            var state = new MockAiInterviewClient().analyzeAnswer(
+                    new Context(1L, "작품", "s", List.of(answer), List.of()), answer);
+            assertEquals(NOT_APPLICABLE, state.status(), text);
+        }
+        // A bare "네" names no tool; it is not saved as one.
+        var yes = new Answer(1L, AI_TOOL, "네", base);
+        assertEquals(NEEDS_REVIEW, new MockAiInterviewClient().analyzeAnswer(
+                new Context(1L, "작품", "s", List.of(yes), List.of()), yes).status());
     }
 
     @Test void humanEditsOpenWithTheEditMentionedDuringAiOutputUse() {

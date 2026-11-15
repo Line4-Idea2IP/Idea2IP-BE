@@ -2,6 +2,7 @@ package com.line4.idea2ip.integration.ai;
 
 import com.line4.idea2ip.domain.interview.entity.InterviewField;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
+import com.line4.idea2ip.domain.interview.entity.NoAiAnswer;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +51,9 @@ class MockAiInterviewClient implements AiInterviewClient {
         if (InterviewQuestions.isClosingQuestion(field, prompt)) {
             return new QuestionDraft(prompt, InterviewQuestions.CLOSING_REASON, List.of());
         }
+        if (InterviewQuestions.isNoAiConfirmation(prompt)) {
+            return new QuestionDraft(prompt, InterviewQuestions.NO_AI_CONFIRMATION_REASON, List.of());
+        }
         MaterialType referenceType = referenceType(field);
         List<String> sourceIds = context.evidence().stream()
                 .filter(source -> source.type() == referenceType)
@@ -67,6 +71,10 @@ class MockAiInterviewClient implements AiInterviewClient {
         var answers = InterviewSupplement.answersWith(context, answer);
         boolean none = InterviewFieldState.isNotApplicableAnswer(text);
         boolean closing = InterviewQuestions.isClosingQuestion(answer.field(), answer.question());
+        if (answer.field() == InterviewField.AI_TOOL) {
+            var aiTool = aiTool(answer, closing, answers);
+            if (aiTool != null) return aiTool;
+        }
         if (none && closing) {
             return new InterviewFieldState(answer.field(), NEEDS_REVIEW, String.join(" / ", answers), true);
         }
@@ -96,5 +104,30 @@ class MockAiInterviewClient implements AiInterviewClient {
         // Keep the field open for one supplementary question when the answer leaves out what the report needs.
         if (status == COMPLETED && InterviewSupplement.next(answer.field(), answers).isPresent()) status = NEEDS_REVIEW;
         return new InterviewFieldState(answer.field(), status, text);
+    }
+
+    /** "No AI" answers to the AI tool question, or null to apply the general rules (a tool name, say). */
+    private static InterviewFieldState aiTool(Answer answer, boolean closing, List<String> answers) {
+        String text = answer.content();
+        if (InterviewQuestions.isNoAiConfirmation(answer.question())) {
+            if (NoAiAnswer.confirms(text)) {
+                return new InterviewFieldState(InterviewField.AI_TOOL, NOT_APPLICABLE, InterviewQuestions.NO_AI_CONFIRMED);
+            }
+            // "아니요": AI was used after all, so ask for the tool's name again.
+            if (NoAiAnswer.denies(text)) return new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW, text);
+            return null;
+        }
+        boolean noneLike = InterviewFieldState.isNotApplicableAnswer(text) || NoAiAnswer.clearlyNone(text)
+                || NoAiAnswer.unclearNone(text);
+        // A closing question asks whether there is more to add, so "없음" there means nothing more.
+        if (closing && noneLike) {
+            return new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW, String.join(" / ", answers), true);
+        }
+        if (NoAiAnswer.clearlyNone(text)) return new InterviewFieldState(InterviewField.AI_TOOL, NOT_APPLICABLE, text);
+        // Unclear "none" asks for confirmation next; a bare "네" names no tool, so the tool question is asked again.
+        if (NoAiAnswer.unclearNone(text) || !InterviewFieldState.isNotApplicableAnswer(text) && NoAiAnswer.notAToolName(text)) {
+            return new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW, text);
+        }
+        return null;
     }
 }

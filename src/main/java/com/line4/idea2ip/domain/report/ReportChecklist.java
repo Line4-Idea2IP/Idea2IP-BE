@@ -39,14 +39,27 @@ class ReportChecklist {
                         !material.getFiles().isEmpty(), material.getDescription(), material.getProductionDate()))
                 .toList();
         var artwork = artworks.findByProject_ProjectId(projectId).orElse(null);
-        var states = interviews.findByProject_ProjectId(projectId).map(interview -> interview.getFieldStates())
-                .orElse(List.of());
+        var states = fieldStates(projectId);
         var needsReview = states.stream().filter(state -> state.status() == InterviewFieldState.Status.NEEDS_REVIEW)
                 .map(InterviewFieldState::field).toList();
+        return items(info, artwork != null, artwork == null ? null : artwork.getDescription(), confirmed, unresolvedFields,
+                needsReview, noAiUse(states, confirmed));
+    }
+
+    /** {@link ReportReadinessSections#noAiUse} for a project's current interview. */
+    boolean noAiUse(Project project, List<Confirmed> confirmed) {
+        return noAiUse(fieldStates(project.getProjectId()), confirmed);
+    }
+
+    private List<InterviewFieldState> fieldStates(Long projectId) {
+        return interviews.findByProject_ProjectId(projectId).map(interview -> interview.getFieldStates())
+                .orElse(List.of());
+    }
+
+    private static boolean noAiUse(List<InterviewFieldState> states, List<Confirmed> confirmed) {
         var interviewStatus = new java.util.EnumMap<InterviewField, InterviewFieldState.Status>(InterviewField.class);
         states.forEach(state -> interviewStatus.put(state.field(), state.status()));
-        return items(info, artwork != null, artwork == null ? null : artwork.getDescription(), confirmed, unresolvedFields,
-                needsReview, ReportReadinessSections.noAiUse(interviewStatus, confirmed));
+        return ReportReadinessSections.noAiUse(interviewStatus, confirmed);
     }
 
     static List<String> items(List<MaterialInfo> materials, boolean hasArtwork, String artworkDescription,

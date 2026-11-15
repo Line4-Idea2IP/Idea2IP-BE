@@ -9,6 +9,7 @@ import java.util.*;
 
 @Component
 class ReportContentAssembler {
+    static final String NO_AI_USE = "AI 도구를 사용하지 않았다고 인터뷰에서 확인했습니다.";
     static final String NO_OFFICIAL_GUIDE =
             "공식 지침: 검토된 공식 판본이 연결되지 않았습니다. 등록 신청 전 한국저작권위원회 등 공식 안내를 직접 확인해 주세요.";
 
@@ -74,6 +75,9 @@ class ReportContentAssembler {
         if (anyAi) {
             byKey.put(SectionKey.AI_USAGE.name(), section(SectionKey.AI_USAGE,
                     List.of(aiParagraph(aiTools, aiPurposes, aiOutputs, aiMaterials.values())), List.copyOf(aiSourceIds)));
+        } else if (Boolean.TRUE.equals(input.noAiUse())) {
+            // The draft may restate the raw answers ("업슴", "네"); the interview already settled that no AI was used.
+            byKey.put(SectionKey.AI_USAGE.name(), section(SectionKey.AI_USAGE, List.of(NO_AI_USE), List.of()));
         }
 
         var artwork = input.aiInput().sources().stream().filter(source -> source.artworkId() != null).toList();

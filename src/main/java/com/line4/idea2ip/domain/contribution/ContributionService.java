@@ -5,6 +5,7 @@ import com.line4.idea2ip.domain.contribution.ContributionModels.*;
 import com.line4.idea2ip.domain.interview.entity.AiInterview;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
 import com.line4.idea2ip.domain.interview.entity.InterviewMessage;
+import com.line4.idea2ip.domain.interview.entity.NoAiAnswer;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
 import com.line4.idea2ip.domain.interview.repository.InterviewMessageRepository;
 import com.line4.idea2ip.domain.material.repository.CreativeMaterialRepository;
@@ -267,8 +268,11 @@ public class ContributionService {
             if (source.messageId() == null || !"ai_usage".equals(source.targetField())) continue;
             // "없습니다" means no AI work; it must not appear as a tool, purpose or output.
             if (InterviewFieldState.isNotApplicableAnswer(source.content())) continue;
+            // "업슴", "AI 안 썼어요" and the "네" confirming them stay in the transcript but name no tool.
+            boolean toolAnswer = source.locator().endsWith("(AI_TOOL)");
+            if (toolAnswer && NoAiAnswer.notAToolName(source.content())) continue;
             var proposal = proposal(results, sources, source, decided);
-            if (source.locator().endsWith("(AI_TOOL)")) proposal.tools.add(source.content());
+            if (toolAnswer) proposal.tools.add(source.content());
             if (source.locator().endsWith("(AI_PURPOSE)")) proposal.purposes.add(source.content());
             if (source.locator().endsWith("(AI_OUTPUT_USAGE)")) proposal.outputs.add(source.content());
             proposal.evidence.putIfAbsent(source.sourceId(), Evidence.from(source, source.content()));
