@@ -124,6 +124,7 @@ final class InterviewQuestions {
             var found = new ArrayList<Related>();
             for (String sentence : SENTENCE_END.split(turn.answer())) {
                 boolean otherActor = false;
+                boolean uncertainActor = false;
                 for (String part : CLAUSE_BREAK.split(sentence)) {
                     String clause = part.strip();
                     var subjects = SUBJECT_OR_TOPIC.matcher(clause);
@@ -143,13 +144,14 @@ final class InterviewQuestions {
                             unclearTopic = true;
                         }
                     }
-                    // A connected clause can inherit the preceding actor until the speaker names another.
+                    // A connected clause can inherit the preceding actor or uncertainty about that actor.
                     otherActor = otherSubject || (otherActor && !firstPerson);
+                    uncertainActor = !firstPerson && (uncertainActor || unclearTopic);
                     if (words.stream().noneMatch(clause::contains)) continue;
                     if (negated(clause)) doubted = true;
                     else if (!otherActor && (firstPerson || clause.contains("직접") || clause.contains("손으로"))
                             && PASSIVE.stream().noneMatch(clause::contains)) {
-                        found.add(new Related(trim(endClause(clause)), firstPerson || !unclearTopic));
+                        found.add(new Related(trim(endClause(clause)), !uncertainActor));
                     }
                 }
             }

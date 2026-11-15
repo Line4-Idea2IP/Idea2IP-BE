@@ -116,6 +116,11 @@ class InterviewTranscriptTests {
     @Test void anUnclearActorIsQuotedButAskedAboutFirst() {
         var named = related("민수는 색을 직접 칠했어요.").orElseThrow();
         assertFalse(named.ownWork());
+        // The doubt about an unclear topic carries into the next clause until the speaker names themself.
+        var carried = related("민수는 구도를 잡고 색은 직접 칠했어요.").orElseThrow();
+        assertEquals("색은 직접 칠했어요", carried.statement());
+        assertFalse(carried.ownWork());
+        assertTrue(related("민수는 구도를 잡고 제가 색은 직접 칠했어요.").orElseThrow().ownWork());
         assertEquals("‘민수는 색을 직접 칠했어요’라고 하셨는데, 이 수정은 직접 하신 건가요? "
                 + "직접 하셨다면 어떤 부분을 어떻게 바꾸셨는지 알려주세요.",
                 InterviewQuestions.opening(HUMAN_EDITED_EXPRESSION, named));
