@@ -242,7 +242,8 @@ public class ContributionService {
         List<Candidate> grounded = new ArrayList<>(candidates);
         for (var source : input.sources()) {
             if (source.messageId() != null && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)")
-                    && !InterviewFieldState.isNotApplicableAnswer(source.content())) {
+                    && (Boolean.TRUE.equals(source.validatedAnswer())
+                            || !InterviewFieldState.isNotApplicableAnswer(source.content()))) {
                 grounded.add(new Candidate("human_created", source.content(), List.of(source.sourceId())));
             }
         }
@@ -253,7 +254,8 @@ public class ContributionService {
                     throw new Failure("AI_RESULT_INVALID", true);
                 }
                 // The AI reports "no such work" answers as statements; they are not contributions.
-                boolean declined = InterviewFieldState.isNotApplicableAnswer(source.content());
+                boolean declined = !Boolean.TRUE.equals(source.validatedAnswer())
+                        && InterviewFieldState.isNotApplicableAnswer(source.content());
                 boolean directEdit = !declined && candidate.category().equals("human_edit")
                         && "human_edit".equals(source.targetField());
                 boolean directCreation = !declined && source.locator().endsWith("(HUMAN_CREATED_ELEMENT)");
@@ -267,10 +269,10 @@ public class ContributionService {
         for (var source : input.sources()) {
             if (source.messageId() == null || !"ai_usage".equals(source.targetField())) continue;
             // "없습니다" means no AI work; it must not appear as a tool, purpose or output.
-            if (InterviewFieldState.isNotApplicableAnswer(source.content())) continue;
-            // "업슴", "AI 안 썼어요" and the "네" confirming them stay in the transcript but name no tool.
             boolean toolAnswer = source.locator().endsWith("(AI_TOOL)");
-            if (toolAnswer && NoAiAnswer.notAToolName(source.content())) continue;
+            if (!Boolean.TRUE.equals(source.validatedAnswer())
+                    && (InterviewFieldState.isNotApplicableAnswer(source.content())
+                        || (toolAnswer && NoAiAnswer.notAToolName(source.content())))) continue;
             var proposal = proposal(results, sources, source, decided);
             if (toolAnswer) proposal.tools.add(source.content());
             if (source.locator().endsWith("(AI_PURPOSE)")) proposal.purposes.add(source.content());

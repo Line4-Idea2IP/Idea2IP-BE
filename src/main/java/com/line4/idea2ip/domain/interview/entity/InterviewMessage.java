@@ -58,6 +58,16 @@ public class InterviewMessage extends BaseEntity {
     @Column(length = 500)
     private String reason;
 
+    @Column(name = "validated_evidence_quote", columnDefinition = "TEXT")
+    private String validatedEvidenceQuote;
+
+    public void recordValidatedEvidence(String quote) {
+        if (role != Role.USER || quote == null || !content.contains(quote)) {
+            throw new IllegalArgumentException("Expected a verbatim quote from this answer");
+        }
+        validatedEvidenceQuote = quote;
+    }
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false)
     private List<String> sourceIds;

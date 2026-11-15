@@ -50,12 +50,14 @@ public class ProjectBriefInput {
                 if (message.getRole() != Role.USER) {
                     continue;
                 }
+                String quote = message.getValidatedEvidenceQuote();
+                if ("".equals(quote)) continue;
                 String locator = "인터뷰 답변 " + message.getSequenceNo() + " (" + message.getTargetField() + ")";
                 Long materialId = linkedMaterial(message.getReplyToQuestion().getSourceIds(),
                         message.getTargetField(), materialTypes);
                 sources.add(new Source("answer:" + message.getMessageId(), "USER_STATEMENT", locator,
-                        message.getContent(), field(message.getTargetField()), locator, materialId, null,
-                        message.getMessageId(), null));
+                        quote == null ? message.getContent() : quote, field(message.getTargetField()), locator, materialId, null,
+                        message.getMessageId(), null, quote == null ? null : true));
             }
         });
         return new Input(projectId.toString(), project.getTitle(), "project-" + projectId + "-r" + project.getInputRevision(),

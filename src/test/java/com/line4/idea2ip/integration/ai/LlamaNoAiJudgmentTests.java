@@ -43,7 +43,7 @@ class LlamaNoAiJudgmentTests {
         });
         server.start();
         return new LlamaInterviewClient("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-model",
-                JsonMapper.builder().build(), new MockAiInterviewClient());
+                JsonMapper.builder().build());
     }
 
     private static String completion(String content, String finishReason) {
@@ -60,64 +60,65 @@ class LlamaNoAiJudgmentTests {
         return new Answer(1L, AI_TOOL, text, BASE);
     }
 
-    @Test void aClearNoAiReadingSkipsTheConfirmation() throws IOException {
-        var client = clientReplying(completion("{\"intent\":\"NO_AI_USE\"}", "stop"));
-        for (String text : List.of("업슴", "없슴", "ㄴㄴ")) {
-            var state = client.analyzeAnswer(context(answer(text), List.of()), answer(text));
-            assertEquals(NOT_APPLICABLE, state.status(), text);
-            assertEquals(InterviewQuestions.NO_AI_JUDGED, state.summary(), text);
-        }
-        // The model sees the question with the raw answer.
-        assertEquals(3, requests.size());
-        assertTrue(requests.getFirst().contains("업슴"));
-        assertTrue(requests.getFirst().contains("어떤 AI 도구를 사용했나요"));
+    private static String answerJson(String intent, String quote, String clarification) {
+        return JsonMapper.builder().build().writeValueAsString(java.util.Map.of(
+                "intent", intent, "quote", quote, "clarification", clarification, "missing_details", false));
     }
 
-    @Test void anUnresolvedOrBrokenReplyKeepsTheConfirmation() throws IOException {
-        for (String body : List.of(completion("{\"intent\":\"UNRESOLVED\"}", "stop"),
-                completion("{\"intent\":\"NO_AI_USE\"}", "length"),
-                completion("not json", "stop"),
-                completion("{\"intent\":\"NO_AI_USE\",\"extra\":1}", "stop"),
-                "{}", "not json at all")) {
+    @Test void everyLiveAnswerIsInterpretedWithItsQuestion() throws IOException {
+        var client = clientReplying(completion(answerJson("NO_AI_USE", "", ""), "stop"));
+        for (String text : List.of("업슴", "없슴", "ㄴㄴ", "없음", "전부 손으로 작업했어요")) {
+            var answer = answer(text);
+            var result = client.evaluate(context(answer, List.of()), answer);
+            assertEquals(NOT_APPLICABLE, result.state().status(), text);
+            assertEquals("", result.evidenceQuote());
+        }
+        assertEquals(5, requests.size());
+        assertTrue(requests.getLast().contains("전부 손으로 작업했어요"));
+        assertTrue(requests.getLast().contains("어떤 AI 도구를 사용했나요"));
+    }
+
+    @Test void aNamedToolUsesOnlyTheOriginalEvidenceQuote() throws IOException {
+        var client = clientReplying(completion(answerJson("ANSWERED", "스테이블 디퓨젼", ""), "stop"));
+        var reply = new Answer(2L, AI_TOOL, "스테이블 디퓨젼 썼어요", InterviewQuestions.NO_AI_CONFIRMATION);
+        var result = client.evaluate(context(reply, List.of()), reply);
+        assertEquals(COMPLETED, result.state().status());
+        assertEquals("스테이블 디퓨젼", result.evidenceQuote());
+        assertEquals(1, requests.size());
+    }
+
+    @Test void unresolvedMeaningSuppliesAClarificationTopic() throws IOException {
+        var client = clientReplying(completion(answerJson("UNRESOLVED", "", "다른 도구를 사용했는지"), "stop"));
+        var answer = answer("챗GPT는 안 썼어요");
+        var result = client.evaluate(context(answer, List.of()), answer);
+        assertEquals(NEEDS_REVIEW, result.state().status());
+        assertEquals("다른 도구를 사용했는지", result.clarification());
+        assertEquals(1, requests.size());
+    }
+
+    @Test void malformedOrUngroundedModelRepliesAreRejected() throws IOException {
+        for (String body : List.of(completion(answerJson("NO_AI_USE", "", ""), "length"),
+                completion(answerJson("ANSWERED", "Midjourney", ""), "stop"),
+                completion("not json", "stop"), "{}")) {
             var client = clientReplying(body);
-            var state = client.analyzeAnswer(context(answer("ㄴㄴ"), List.of()), answer("ㄴㄴ"));
-            assertEquals(NEEDS_REVIEW, state.status(), body);
+            var answer = answer("ㄴㄴ");
+            assertThrows(IllegalStateException.class, () -> client.evaluate(context(answer, List.of()), answer));
             stop();
         }
     }
 
-    @Test void anUnreachableModelKeepsTheConfirmation() {
-        var client = new LlamaInterviewClient("http://127.0.0.1:9/v1", "test-model", JsonMapper.builder().build(),
-                new MockAiInterviewClient());
-        var state = client.analyzeAnswer(context(answer("업슴"), List.of()), answer("업슴"));
-        assertEquals(NEEDS_REVIEW, state.status());
-        var afterTypo = context(answer("업슴"), List.of());
-        assertEquals(InterviewQuestions.NO_AI_CONFIRMATION, client.generateQuestion(afterTypo, AI_TOOL).content());
+    @Test void anUnreachableModelLeavesTheAnswerForRetry() {
+        var client = new LlamaInterviewClient("http://127.0.0.1:9/v1", "test-model", JsonMapper.builder().build());
+        var answer = answer("업슴");
+        assertThrows(org.springframework.web.client.RestClientException.class,
+                () -> client.evaluate(context(answer, List.of()), answer));
     }
 
-    @Test void theModelIsNotAskedWhenTheRulesAlreadyDecide() throws IOException {
-        var client = clientReplying(completion("{\"intent\":\"NO_AI_USE\"}", "stop"));
-        // A plain "no AI" and a named tool are settled by rule.
-        assertEquals(NOT_APPLICABLE, client.analyzeAnswer(context(answer("AI 안 씀"), List.of()), answer("AI 안 씀")).status());
-        assertEquals(COMPLETED, client.analyzeAnswer(context(answer("미드저니"), List.of()), answer("미드저니")).status());
-        // A reply to the confirmation question is read as yes or no.
-        var reply = new Answer(2L, AI_TOOL, "아니요", InterviewQuestions.NO_AI_CONFIRMATION);
-        assertEquals(NEEDS_REVIEW, client.analyzeAnswer(context(reply, List.of()), reply).status());
-        assertTrue(requests.isEmpty());
-    }
-
-    @Test void registeredAiMaterialsLeaveTheContradictionToTheUser() throws IOException {
-        var client = clientReplying(completion("{\"intent\":\"NO_AI_USE\"}", "stop"));
+    @Test void registeredAiMaterialsPreventAnAutomaticNoAiDecision() throws IOException {
+        var client = clientReplying(completion(answerJson("NO_AI_USE", "", ""), "stop"));
         var registered = List.of(new Evidence("material:1:file:1", MaterialType.AI_ASSISTED, "시안", null, "Midjourney"));
-        var state = client.analyzeAnswer(context(answer("업슴"), registered), answer("업슴"));
-        assertEquals(NEEDS_REVIEW, state.status());
-        assertTrue(requests.isEmpty());
-    }
-
-    @Test void oneToolDeniedGoesToTheModelInsteadOfTheRules() throws IOException {
-        var client = clientReplying(completion("{\"intent\":\"UNRESOLVED\"}", "stop"));
-        var state = client.analyzeAnswer(context(answer("챗GPT는 안 썼어요"), List.of()), answer("챗GPT는 안 썼어요"));
-        assertEquals(NEEDS_REVIEW, state.status());
+        var answer = answer("업슴");
+        assertEquals(NEEDS_REVIEW, client.evaluate(context(answer, registered), answer).state().status());
         assertEquals(1, requests.size());
     }
 }

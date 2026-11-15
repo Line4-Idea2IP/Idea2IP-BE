@@ -11,6 +11,17 @@ public interface AiInterviewClient {
 
     InterviewFieldState analyzeAnswer(Context context, Answer answer);
 
+    default AnswerAnalysis evaluate(Context context, Answer answer) {
+        return new AnswerAnalysis(analyzeAnswer(context, answer), null, null);
+    }
+
+    default QuestionDraft generateQuestion(Context context, InterviewField field, String clarification) {
+        return generateQuestion(context, field);
+    }
+
+    /** A null evidence quote leaves legacy/mock source handling in place; empty marks a live reply with no source. */
+    record AnswerAnalysis(InterviewFieldState state, String evidenceQuote, String clarification) {}
+
     record Context(Long projectId, String title, String snapshotVersion,
                    List<Answer> answers, List<Evidence> evidence, List<AskedQuestion> questions,
                    List<PreviousTurn> turns) {
@@ -27,7 +38,11 @@ public interface AiInterviewClient {
     }
 
     /** question: text of the question this answers (null when unknown); used to recognise closing prompts. */
-    record Answer(Long messageId, InterviewField field, String content, String question) {
+    record Answer(Long messageId, InterviewField field, String content, String question, String evidenceQuote) {
+        public Answer(Long messageId, InterviewField field, String content, String question) {
+            this(messageId, field, content, question, null);
+        }
+
         public Answer(Long messageId, InterviewField field, String content) {
             this(messageId, field, content, null);
         }

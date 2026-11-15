@@ -176,7 +176,8 @@ public class InterviewService {
             return plan.state();
         }
 
-        InterviewFieldState evaluation = callAi(() -> ai.analyzeAnswer(plan.context(), plan.answer()));
+        var analysis = callAi(() -> ai.evaluate(plan.context(), plan.answer()));
+        InterviewFieldState evaluation = analysis == null ? null : analysis.state();
         if (evaluation == null || evaluation.field() != plan.answer().field() || evaluation.status() == null) {
             throw new BaseException(INTERVIEW_AI_UNAVAILABLE);
         }
@@ -184,7 +185,8 @@ public class InterviewService {
                 .filter(answer -> answer.field() == evaluation.field()).map(Answer::content).toList();
         var fields = InterviewProgress.apply(plan.fields(), evaluation, answersForField);
         InterviewField target = nextField(fields);
-        QuestionDraft question = target == null ? null : generateQuestion(plan.context(), target);
+        String clarification = target == evaluation.field() ? analysis.clarification() : null;
+        QuestionDraft question = target == null ? null : generateQuestion(plan.context(), target, clarification);
 
         return transaction.execute(status -> {
             projects.getOwnedProjectForUpdate(userId, projectId);
@@ -195,6 +197,9 @@ public class InterviewService {
                 return state(projectId, interview, last);
             }
 
+            if (analysis.evidenceQuote() != null) {
+                last.recordValidatedEvidence(analysis.evidenceQuote());
+            }
             interview.updateFields(fields);
             if (question != null) {
                 last = saveQuestion(interview, last.getSequenceNo() + 1, target, question);
@@ -249,7 +254,11 @@ public class InterviewService {
     }
 
     private QuestionDraft generateQuestion(Context context, InterviewField target) {
-        QuestionDraft question = callAi(() -> ai.generateQuestion(context, target));
+        return generateQuestion(context, target, null);
+    }
+
+    private QuestionDraft generateQuestion(Context context, InterviewField target, String clarification) {
+        QuestionDraft question = callAi(() -> ai.generateQuestion(context, target, clarification));
         if (question == null || !StringUtils.hasText(question.content()) || question.content().length() > 500
                 || (question.reason() != null && question.reason().length() > 500) || question.sourceIds() == null) {
             throw new BaseException(INTERVIEW_AI_UNAVAILABLE);
@@ -298,7 +307,7 @@ public class InterviewService {
     private Answer toAnswer(InterviewMessage message) {
         var question = message.getReplyToQuestion();
         return new Answer(message.getMessageId(), message.getTargetField(), message.getContent(),
-                question == null ? null : question.getContent());
+                question == null ? null : question.getContent(), message.getValidatedEvidenceQuote());
     }
 
     private Message toMessage(InterviewMessage message) {

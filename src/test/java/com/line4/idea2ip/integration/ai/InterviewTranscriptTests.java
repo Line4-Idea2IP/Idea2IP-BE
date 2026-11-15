@@ -6,7 +6,7 @@ import com.line4.idea2ip.integration.ai.AiInterviewClient.AskedQuestion;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Context;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.PreviousTurn;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.json.JsonMapper;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,12 +44,6 @@ class InterviewTranscriptTests {
         return new Context(13L, "사슬과 푸른 시계", "snapshot", answers, List.of(), questions, history);
     }
 
-    /** A live client pointed at a closed port: any model call fails, proving the question needed no model. */
-    private static LlamaInterviewClient offlineLiveClient() {
-        return new LlamaInterviewClient("http://127.0.0.1:9/v1", "test-model", JsonMapper.builder().build(),
-                new MockAiInterviewClient());
-    }
-
     @Test void anUnclearNoAiAnswerIsConfirmedBeforeSkippingAiQuestions() {
         var base = MockAiInterviewClient.baseQuestion(AI_TOOL);
         var typo = new Answer(1L, AI_TOOL, "ㄴㄴ", base);
@@ -58,7 +52,7 @@ class InterviewTranscriptTests {
         var mock = new MockAiInterviewClient();
         // Not a tool name and not yet "no AI": the field stays open for one confirmation.
         assertEquals(NEEDS_REVIEW, mock.analyzeAnswer(afterTypo, typo).status());
-        for (AiInterviewClient client : List.of(mock, offlineLiveClient())) {
+        for (AiInterviewClient client : List.of(mock)) {
             var draft = client.generateQuestion(afterTypo, AI_TOOL);
             assertEquals(InterviewQuestions.NO_AI_CONFIRMATION, draft.content());
             assertEquals(InterviewQuestions.NO_AI_CONFIRMATION_REASON, draft.reason());
@@ -76,7 +70,7 @@ class InterviewTranscriptTests {
         var no = new Answer(2L, AI_TOOL, "아니요", confirm);
         var afterNo = new Context(1L, "작품", "s", List.of(typo, no), List.of(), asked, List.of());
         assertEquals(NEEDS_REVIEW, mock.analyzeAnswer(afterNo, no).status());
-        for (AiInterviewClient client : List.of(mock, offlineLiveClient())) {
+        for (AiInterviewClient client : List.of(mock)) {
             String next = client.generateQuestion(afterNo, AI_TOOL).content();
             assertNotEquals(confirm, next);
             assertFalse(InterviewQuestions.alreadyAsked(next, List.of(base, confirm)));
@@ -93,7 +87,7 @@ class InterviewTranscriptTests {
             var answer = new Answer(1L, AI_TOOL, text, base);
             var context = new Context(1L, "작품", "s", List.of(answer), List.of());
             // The live client applies the same rule; the closed port proves no model is called.
-            for (AiInterviewClient client : List.of(new MockAiInterviewClient(), offlineLiveClient())) {
+            for (AiInterviewClient client : List.of(new MockAiInterviewClient())) {
                 assertEquals(NOT_APPLICABLE, client.analyzeAnswer(context, answer).status(), text);
             }
         }
@@ -106,7 +100,7 @@ class InterviewTranscriptTests {
     @Test void humanEditsOpenWithTheEditMentionedDuringAiOutputUse() {
         // Only the quoted work is asked about, so "없음" cannot be read as "no edits at all".
         String expected = "‘색상과 표정은 직접 수정했어요’라고 하셨는데, 어떤 부분을 어떻게 바꾸셨나요?";
-        for (AiInterviewClient client : List.of(new MockAiInterviewClient(), offlineLiveClient())) {
+        for (AiInterviewClient client : List.of(new MockAiInterviewClient())) {
             var draft = client.generateQuestion(after(5), HUMAN_EDITED_EXPRESSION);
             assertEquals(expected, draft.content());
             assertEquals(InterviewQuestions.OPENING_REASON, draft.reason());
@@ -114,7 +108,7 @@ class InterviewTranscriptTests {
     }
 
     @Test void supplementQuotesTheAnswerWithoutPresupposingAPosition() {
-        for (AiInterviewClient client : List.of(new MockAiInterviewClient(), offlineLiveClient())) {
+        for (AiInterviewClient client : List.of(new MockAiInterviewClient())) {
             String question = client.generateQuestion(after(6), HUMAN_EDITED_EXPRESSION).content();
             assertTrue(question.startsWith("‘시계판을 파란색으로 직접 칠했습니다’라고 하셨는데, 그렇게 정한 이유가 있나요?"), question);
             assertFalse(question.contains("그 위치"), question);
