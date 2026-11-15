@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static com.line4.idea2ip.domain.interview.entity.InterviewField.AI_TOOL;
+import static com.line4.idea2ip.domain.interview.entity.InterviewField.HUMAN_CREATED_ELEMENT;
+import static com.line4.idea2ip.domain.interview.entity.InterviewField.HUMAN_EDITED_EXPRESSION;
 import static com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Status.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -96,9 +98,37 @@ class LlamaNoAiJudgmentTests {
         assertEquals(1, requests.size());
     }
 
-    @Test void malformedOrUngroundedModelRepliesAreRejected() throws IOException {
+    @Test void anUnverifiedQuoteRequestsClarificationAfterRetry() throws IOException {
+        var client = clientReplying(completion(answerJson("ANSWERED", "Midjourney", ""), "stop"));
+        var answer = answer("ㄴㄴ");
+        var result = client.evaluate(context(answer, List.of()), answer);
+
+        assertEquals(NEEDS_REVIEW, result.state().status());
+        assertTrue(result.state().needsAnswer());
+        assertEquals("", result.evidenceQuote());
+        assertNotNull(result.clarification());
+        assertFalse(result.clarification().isBlank());
+        assertEquals(2, requests.size());
+    }
+
+    @Test void aQuoteFromAnotherFieldRequestsClarificationAfterRetry() throws IOException {
+        String quote = "손과 사슬을 직접 그렸어요.";
+        var client = clientReplying(completion(answerJson("NO_ADDITIONAL_WORK", quote, ""), "stop"));
+        var previous = new Answer(1L, HUMAN_CREATED_ELEMENT, quote, "무엇을 직접 그렸나요?", quote);
+        var answer = new Answer(2L, HUMAN_EDITED_EXPRESSION, "그 외에 더 한 건 없어요.", "무엇을 직접 수정했나요?");
+        var context = new Context(1L, "작품", "s", List.of(previous, answer), List.of(), List.of(), List.of());
+        var result = client.evaluate(context, answer);
+
+        assertEquals(NEEDS_REVIEW, result.state().status());
+        assertTrue(result.state().needsAnswer());
+        assertEquals("", result.evidenceQuote());
+        assertNotNull(result.clarification());
+        assertFalse(result.clarification().isBlank());
+        assertEquals(2, requests.size());
+    }
+
+    @Test void malformedModelRepliesAreRejected() throws IOException {
         for (String body : List.of(completion(answerJson("NO_AI_USE", "", ""), "length"),
-                completion(answerJson("ANSWERED", "Midjourney", ""), "stop"),
                 completion("not json", "stop"), "{}")) {
             var client = clientReplying(body);
             var answer = answer("ㄴㄴ");

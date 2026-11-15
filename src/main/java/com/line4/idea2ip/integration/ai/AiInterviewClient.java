@@ -38,7 +38,12 @@ public interface AiInterviewClient {
     }
 
     /** question: text of the question this answers (null when unknown); used to recognise closing prompts. */
-    record Answer(Long messageId, InterviewField field, String content, String question, String evidenceQuote) {
+    record Answer(Long messageId, InterviewField field, String content, String question,
+                  String evidenceQuote, String questionReason) {
+        public Answer(Long messageId, InterviewField field, String content, String question, String evidenceQuote) {
+            this(messageId, field, content, question, evidenceQuote, null);
+        }
+
         public Answer(Long messageId, InterviewField field, String content, String question) {
             this(messageId, field, content, question, null);
         }
