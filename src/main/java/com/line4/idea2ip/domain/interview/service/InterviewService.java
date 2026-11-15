@@ -163,19 +163,39 @@ public class InterviewService {
         AdvancePlan plan = transaction.execute(status -> {
             Project project = projects.getOwnedProjectForUpdate(userId, projectId);
             AiInterview interview = getStartedInterview(projectId);
-            InterviewMessage last = latest(interview);
-            if (!isPending(interview, last, expectedAnswerId)) {
-                return new AdvancePlan(state(projectId, interview, last), null, null, List.of());
-            }
-
-            var history = messages.findAllByInterview_InterviewIdOrderBySequenceNo(interview.getInterviewId());
-            return new AdvancePlan(null, context(project, history, readiness.materials(projectId)),
-                    toAnswer(last), List.copyOf(interview.getFieldStates()));
+            return advancePlan(project, interview, latest(interview), expectedAnswerId);
         });
         if (plan.state() != null) {
             return plan.state();
         }
 
+        AdvancePlan evaluated = plan.evaluationClarification() == null
+                ? evaluateAndStore(userId, projectId, plan)
+                : plan;
+        if (evaluated.state() != null) {
+            return evaluated.state();
+        }
+
+        Long answerId = evaluated.answer().messageId();
+        InterviewField target = nextField(evaluated.fields());
+        String clarification = target == evaluated.answer().field()
+                && StringUtils.hasText(evaluated.evaluationClarification()) ? evaluated.evaluationClarification() : null;
+        QuestionDraft question = generateQuestion(evaluated.context(), target, clarification);
+
+        return transaction.execute(status -> {
+            projects.getOwnedProjectForUpdate(userId, projectId);
+            AiInterview interview = getStartedInterview(projectId);
+            InterviewMessage last = latest(interview);
+            if (!isPending(interview, last, answerId)) {
+                return state(projectId, interview, last);
+            }
+
+            var saved = saveQuestion(interview, last.getSequenceNo() + 1, target, question);
+            return state(projectId, interview, saved);
+        });
+    }
+
+    private AdvancePlan evaluateAndStore(Long userId, Long projectId, AdvancePlan plan) {
         var analysis = callAi(() -> ai.evaluate(plan.context(), plan.answer()));
         InterviewFieldState evaluation = analysis == null ? null : analysis.state();
         if (evaluation == null || evaluation.field() != plan.answer().field() || evaluation.status() == null) {
@@ -184,28 +204,30 @@ public class InterviewService {
         var answersForField = plan.context().answers().stream()
                 .filter(answer -> answer.field() == evaluation.field()).map(Answer::content).toList();
         var fields = InterviewProgress.apply(plan.fields(), evaluation, answersForField);
-        InterviewField target = nextField(fields);
-        String clarification = target == evaluation.field() ? analysis.clarification() : null;
-        QuestionDraft question = target == null ? null : generateQuestion(plan.context(), target, clarification);
+        Long answerId = plan.answer().messageId();
 
         return transaction.execute(status -> {
-            projects.getOwnedProjectForUpdate(userId, projectId);
+            Project project = projects.getOwnedProjectForUpdate(userId, projectId);
             AiInterview interview = getStartedInterview(projectId);
             InterviewMessage last = latest(interview);
-            // A concurrent retry may already have applied the evaluation and created the next question.
-            if (!isPending(interview, last, plan.answer().messageId())) {
-                return state(projectId, interview, last);
+            // Retries may overlap while the model runs. Under the project lock, only the first decision is stored.
+            if (isPending(interview, last, answerId) && last.getEvaluationClarification() == null) {
+                String clarification = nextField(fields) == evaluation.field() ? analysis.clarification() : null;
+                last.recordEvaluation(analysis.evidenceQuote(), clarification);
+                interview.updateFields(fields);
             }
-
-            if (analysis.evidenceQuote() != null) {
-                last.recordValidatedEvidence(analysis.evidenceQuote());
-            }
-            interview.updateFields(fields);
-            if (question != null) {
-                last = saveQuestion(interview, last.getSequenceNo() + 1, target, question);
-            }
-            return state(projectId, interview, last);
+            return advancePlan(project, interview, last, answerId);
         });
+    }
+
+    private AdvancePlan advancePlan(Project project, AiInterview interview, InterviewMessage last, Long expectedAnswerId) {
+        if (!isPending(interview, last, expectedAnswerId)) {
+            return new AdvancePlan(state(project.getProjectId(), interview, last), null, null, List.of(), null);
+        }
+
+        var history = messages.findAllByInterview_InterviewIdOrderBySequenceNo(interview.getInterviewId());
+        return new AdvancePlan(null, context(project, history, readiness.materials(project.getProjectId())),
+                toAnswer(last), List.copyOf(interview.getFieldStates()), last.getEvaluationClarification());
     }
 
     private List<InterviewFieldState> checkReadiness(Long projectId, List<CreativeMaterial> materials) {
@@ -322,6 +344,7 @@ public class InterviewService {
     private record StartPlan(Context context, InterviewField firstField) {
     }
 
-    private record AdvancePlan(InterviewStateRes state, Context context, Answer answer, List<InterviewFieldState> fields) {
+    private record AdvancePlan(InterviewStateRes state, Context context, Answer answer,
+                               List<InterviewFieldState> fields, String evaluationClarification) {
     }
 }

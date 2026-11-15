@@ -61,11 +61,22 @@ public class InterviewMessage extends BaseEntity {
     @Column(name = "validated_evidence_quote", columnDefinition = "TEXT")
     private String validatedEvidenceQuote;
 
-    public void recordValidatedEvidence(String quote) {
-        if (role != Role.USER || quote == null || !content.contains(quote)) {
+    // Null means the answer still needs evaluation. An empty string means no clarification is needed.
+    @Column(name = "evaluation_clarification", length = 200)
+    private String evaluationClarification;
+
+    public void recordEvaluation(String quote, String clarification) {
+        if (role != Role.USER || evaluationClarification != null) {
+            throw new IllegalStateException("Only a pending user answer can be evaluated");
+        }
+        if (quote != null && !content.contains(quote)) {
             throw new IllegalArgumentException("Expected a verbatim quote from this answer");
         }
+        if (clarification != null && clarification.length() > 200) {
+            throw new IllegalArgumentException("Clarification exceeds the stored length");
+        }
         validatedEvidenceQuote = quote;
+        evaluationClarification = clarification == null ? "" : clarification;
     }
 
     @JdbcTypeCode(SqlTypes.JSON)
