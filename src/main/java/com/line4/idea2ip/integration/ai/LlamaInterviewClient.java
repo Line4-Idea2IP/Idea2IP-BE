@@ -96,6 +96,7 @@ class LlamaInterviewClient implements AiInterviewClient {
             자료는 질문을 구체화하는 단서다. 자료의 파일명·용도·사용 이미지만 묻는 질문은 피한다.
             AI_TOOL은 AI를 사용했는지와 사용한 경우 도구 이름을 조건부로 묻는다.
             AI_PURPOSE는 AI 도구를 사용한 작업과 목적을 묻는다. 이미 답한 도구 이름을 다시 묻지 않는다.
+            AI_OUTPUT_USAGE는 AI 결과를 최종 작품에 활용했는지 먼저 묻고, 활용했다고 전제하지 않는다.
             HUMAN_EDITED_EXPRESSION은 직접 바꾼 부분이나 작업 방법을 묻는다. 첨부 이미지 자체를 묻지 않는다.
             직접 창작·수정 항목의 질문은 AI 사용보다 사용자의 작업에 초점을 맞춘다.
             clarification이 있으면 latest_answer의 맥락에서 아직 알 수 없는 사실 하나만 확인한다.
@@ -116,6 +117,8 @@ class LlamaInterviewClient implements AiInterviewClient {
             verified_answers의 각 항목은 해당 답변에서 서버가 확인한 원문 구절이다. 참고하되 직접 인용하지 않는다.
             latest_answer가 있으면 확인 쟁점을 이해하는 데 사용한다. 그 답변만으로 작업 여부를 단정하지 않는다.
             구체적인 전제가 없어도 현재 항목에 대한 중립적인 질문을 작성할 수 있다.
+            history에서 다른 항목으로 답한 작업은 이미 확인한 정보다. 그 작업을 target_field 질문으로 다시 묻지 않는다.
+            예를 들어 HUMAN_EDITED_EXPRESSION에서는 그린 방식이나 만든 방식이 아니라 그 뒤에 바꾸거나 덧붙인 작업을 묻는다.
             첨부 자료는 사용하지 않는다. source_ids와 quotes는 모두 빈 배열이다.
             """;
     private static final String QUESTION_REVIEW_RULES = """
@@ -148,8 +151,9 @@ class LlamaInterviewClient implements AiInterviewClient {
             candidate.question은 창작 인터뷰 질문이다. 아래 항목을 서로 독립적으로 판정한다.
             actual_field: 질문이 요구하는 작업을 분류한다.
             HUMAN_CREATED_ELEMENT는 새로 만든 대상과 제작 방식이다. 예를 들어 사슬을 어떻게 그렸는지 묻는 질문이다.
-            HUMAN_EDITED_EXPRESSION은 기존 표현을 어떻게 수정하거나 덧붙였는지 묻는 경우다.
-            OTHER는 위 두 주제를 동시에 묻거나 어느 쪽도 묻지 않는 경우다.
+            HUMAN_EDITED_EXPRESSION은 이미 있던 표현을 어떻게 수정·조정했거나 그 위에 덧붙였는지 묻는 경우다.
+            "직접 수정하거나 추가한 표현"처럼 기존 표현에 더한 작업을 묻는 질문도 HUMAN_EDITED_EXPRESSION이다.
+            OTHER는 새로 만든 요소의 제작 방식과 기존 표현의 수정을 한 질문에서 함께 묻거나, 어느 쪽도 묻지 않는 경우다.
             unsupported_assumption: 답을 기다리는 질문에서, 사용자가 한 특정 작업을 이미 한 사실이라고 단정했는데 입력에 근거가 없으면 true다.
             구체적인 작업을 전제하지 않는 열린 질문은 unsupported_assumption=false다. 자료가 없거나 답을 아직 모른다는 이유로 true를 반환하지 않는다.
             예: "직접 수정한 부분이 있다면 무엇인가요?"는 false. "시계판을 빨간색으로 칠했다고 하셨는데 어떤 도구를 썼나요?"는 그런 진술이 없으면 true다.
@@ -165,7 +169,12 @@ class LlamaInterviewClient implements AiInterviewClient {
     private static final int QUESTION_ATTEMPTS = 4;
     private static final int RECOVERY_TURNS = 4;
     /** A creation question must not also ask about edits; that topic belongs to HUMAN_EDITED_EXPRESSION. */
-    private static final Pattern EDIT_TOPIC = Pattern.compile("수정|고치|고쳤|고친|바꾸|바꾼|바꿨|변경|보정|편집|덧붙");
+    private static final Pattern EDIT_TOPIC = Pattern.compile(
+            "수정|고치|고쳤|고친|바꾸|바꾼|바꿨|변경|보정|편집|덧붙|덧칠|덧그|조정|조절|다듬|손질");
+    private static final Pattern CREATION_TOPIC = Pattern.compile("새로\\s*(만|그|구상)|처음부터|창작");
+    /** Instruction wording from focus or the prompt that must never reach the user. */
+    private static final Pattern INSTRUCTION_TEXT = Pattern.compile(
+            "전제하지\\s*않|target_field|focus|clarification|generation_mode|verified_answers");
     private static final int TITLE_IN_QUESTION_MAX = 40;
     private static final int ANSWER_SEGMENT_LENGTH = 1100;
     private static final int ANSWER_SEGMENT_OVERLAP = 60;
@@ -455,16 +464,22 @@ class LlamaInterviewClient implements AiInterviewClient {
             if (attempt == QUESTION_ATTEMPTS) {
                 request.put("recovery_instruction", "부가 맥락을 언급하지 말고 확인할 정보 한 가지를 직접 물으세요.");
             }
+            JsonNode candidate = null;
             try {
                 var format = questionFormat(field, questionEvidence, useQuotes);
                 String prompt = useRecovery ? QUESTION_PROMPT + QUESTION_RECOVERY_PROMPT : QUESTION_PROMPT;
-                var candidate = chat(questionClient, prompt, request, format, 500);
+                candidate = chat(questionClient, prompt, request, format, 500);
                 var question = validateQuestion(candidate, field, asked, context, questionEvidence, useQuotes);
-                reviewQuestion(reviewInput, candidate, field, useRecovery);
-                return new QuestionDraft(question.content(), reason, question.sourceIds());
+                boolean unlinkSources = reviewQuestion(reviewInput, candidate, field, useRecovery);
+                return new QuestionDraft(question.content(), reason,
+                        unlinkSources ? List.of() : question.sourceIds());
             } catch (InvalidModelResponse exception) {
                 log.warn("Interview question rejected: field={} attempt={} recovery={} reason={}",
                         field, attempt, useRecovery, exception.code);
+                if (candidate != null) {
+                    log.debug("Rejected interview question candidate: field={} attempt={} question={}",
+                            field, attempt, candidate.path("question").asString());
+                }
                 feedback = exception.getMessage();
                 switch (exception.code) {
                     // A quoting mistake only needs the quotes removed; the rest of the context stays useful.
@@ -511,7 +526,8 @@ class LlamaInterviewClient implements AiInterviewClient {
         return result;
     }
 
-    private void reviewQuestion(Map<String, Object> input, JsonNode candidate, InterviewField field, boolean recovery) {
+    /** Returns true when the question is accepted but its material links must be dropped. */
+    private boolean reviewQuestion(Map<String, Object> input, JsonNode candidate, InterviewField field, boolean recovery) {
         var reviewInput = new HashMap<>(input);
         boolean human = field == InterviewField.HUMAN_CREATED_ELEMENT || field == InterviewField.HUMAN_EDITED_EXPRESSION;
         if (human) {
@@ -530,8 +546,10 @@ class LlamaInterviewClient implements AiInterviewClient {
         if (!review.isObject() || !review.path("duplicate").isBoolean()) {
             throw rejected("REVIEW_FORMAT", "검토 결과를 지정한 JSON 형식으로 반환하세요.");
         }
+        boolean unlinkSources = false;
         if (human) {
-            validateHumanQuestionReview(review, field);
+            unlinkSources = validateHumanQuestionReview(review, field, candidate.path("question").asString(),
+                    input.get("evidence"));
         } else if (review.size() != 2 || !review.path("grounded").isBoolean()) {
             throw rejected("REVIEW_FORMAT", "검토 결과를 지정한 JSON 형식으로 반환하세요.");
         }
@@ -542,26 +560,43 @@ class LlamaInterviewClient implements AiInterviewClient {
         if (!human && !review.path("grounded").asBoolean()) {
             throw rejected("UNGROUNDED_QUESTION", "지정 항목, 인용 또는 출처와 맞는 질문을 작성하세요.");
         }
+        return unlinkSources;
     }
 
-    private static void validateHumanQuestionReview(JsonNode review, InterviewField field) {
+    /**
+     * The reviewer often files an edit question as OTHER because "추가한 표현" reads like new work. An edit question
+     * that names edit work and no new creation is accepted on the server's own check.
+     */
+    private static boolean clearlyAsksAboutEdits(InterviewField field, String question) {
+        return field == InterviewField.HUMAN_EDITED_EXPRESSION && EDIT_TOPIC.matcher(question).find()
+                && !CREATION_TOPIC.matcher(question).find();
+    }
+
+    private static boolean validateHumanQuestionReview(JsonNode review, InterviewField field, String question,
+                                                       Object evidence) {
         if (review.size() != 5 || !review.path("actual_field").isString()
                 || !review.path("unsupported_assumption").isBoolean() || !review.path("unused_source").isBoolean()
                 || !review.path("misses_clarification").isBoolean()) {
             throw rejected("REVIEW_FORMAT", "검토 결과를 지정한 JSON 형식으로 반환하세요.");
         }
-        if (!field.name().equals(review.path("actual_field").asString())) {
+        if (!field.name().equals(review.path("actual_field").asString()) && !clearlyAsksAboutEdits(field, question)) {
             throw rejected("WRONG_TOPIC", "이전 항목을 묻지 말고 focus의 내용만 질문하세요: " + focus(field));
         }
         if (review.path("unsupported_assumption").asBoolean()) {
             throw rejected("UNSUPPORTED_ASSUMPTION", "확인되지 않은 구체적 작업을 했다고 전제하지 마세요.");
         }
-        if (review.path("unused_source").asBoolean()) {
-            throw rejected("UNUSED_SOURCE", "질문에 쓰이지 않은 자료는 연결하지 마세요.");
-        }
         if (review.path("misses_clarification").asBoolean()) {
             throw rejected("MISSED_CLARIFICATION", "clarification에 적힌 쟁점을 직접 확인하세요.");
         }
+        if (!review.path("unused_source").asBoolean()) return false;
+        // The question itself passed; only its material link is wrong. Unlinking keeps a good question that a
+        // rejection would have thrown away, and the retry without materials tended to drift to another field.
+        // A question that names a material still needs its link, so it is rejected as before.
+        boolean namesMaterial = evidence instanceof List<?> items && items.stream()
+                .filter(Evidence.class::isInstance).map(Evidence.class::cast)
+                .anyMatch(item -> !item.title().isBlank() && question.contains(item.title()));
+        if (namesMaterial) throw rejected("UNUSED_SOURCE", "질문에 쓰이지 않은 자료는 연결하지 마세요.");
+        return true;
     }
 
     private QuestionDraft validateQuestion(JsonNode candidate, InterviewField field, List<String> asked,
@@ -575,6 +610,9 @@ class LlamaInterviewClient implements AiInterviewClient {
         }
         if (InterviewQuestions.alreadyAsked(question, asked)) {
             throw rejected("EXACT_DUPLICATE", "이미 나온 질문입니다. 확인하지 않은 정보를 물으세요.");
+        }
+        if (INSTRUCTION_TEXT.matcher(question).find()) {
+            throw rejected("INSTRUCTION_TEXT", "입력 항목 이름이나 작성 지침 문구를 질문에 쓰지 말고 사용자에게 묻는 문장만 작성하세요.");
         }
         if (field == InterviewField.HUMAN_CREATED_ELEMENT && EDIT_TOPIC.matcher(question).find()) {
             throw rejected("MIXED_TOPIC", "직접 새로 만든 요소와 제작 방식만 물으세요. 수정·변경한 부분은 묻지 마세요.");
@@ -672,9 +710,9 @@ class LlamaInterviewClient implements AiInterviewClient {
 
     private static String focus(InterviewField field) {
         return switch (field) {
-            case AI_TOOL -> "AI 사용 여부와 사용한 경우 도구 이름 (사용을 전제하지 않음)";
+            case AI_TOOL -> "AI 사용 여부와 사용한 경우 도구 이름";
             case AI_PURPOSE -> "AI를 사용한 작업과 목적";
-            case AI_OUTPUT_USAGE -> "AI 결과를 최종 작품에 활용했는지 여부와, 활용했다면 그 부분 (활용을 전제하지 않음)";
+            case AI_OUTPUT_USAGE -> "AI 결과를 최종 작품에 활용했는지 여부와, 활용했다면 그 부분";
             case HUMAN_CREATED_ELEMENT -> "사용자가 직접 새로 만든 요소와 그 제작 방식";
             case HUMAN_EDITED_EXPRESSION -> "사용자가 직접 수정하거나 추가한 표현과 그 작업 방법";
         };

@@ -152,6 +152,86 @@ class LlamaQuestionGenerationTests {
         assertTrue(shows(generationInputs.get(1).path("validation_feedback"), "수정"));
     }
 
+    /** Deployed run: "직접 그렸고 조정한 이유" passed as a creation question because "조정" was not checked. */
+    @Test void adjustmentWordingAlsoCountsAsAnEditTopic() throws IOException {
+        var client = client();
+        var noAi = new Answer(1L, AI_TOOL, "업슴", "AI 도구를 사용했나요?", "");
+        var context = new Context(1L, "사과와 캔", "s", List.of(noAi), List.of(),
+                List.of(new AskedQuestion(AI_TOOL, "AI 도구를 사용했나요?")),
+                List.of(new PreviousTurn(AI_TOOL, "AI 도구를 사용했나요?", "업슴")));
+        generations.add(question(HUMAN_CREATED_ELEMENT, "사과 단면과 은빛 캔의 명암을 직접 그렸고 조정한 이유는 무엇이었나요?", List.of()));
+        generations.add(question(HUMAN_CREATED_ELEMENT, "직접 새로 그린 요소가 있다면 무엇이고 어떻게 그렸나요?", List.of()));
+        reviews.add(humanReview("HUMAN_CREATED_ELEMENT", false));
+
+        assertEquals("직접 새로 그린 요소가 있다면 무엇이고 어떻게 그렸나요?",
+                client.generateQuestion(context, HUMAN_CREATED_ELEMENT).content());
+        assertEquals(1, reviewInputs.size());
+    }
+
+    /** Deployed run: the focus note "(활용을 전제하지 않음)" was copied to the end of the user's question. */
+    @Test void instructionWordingNeverReachesTheUser() throws IOException {
+        var client = client();
+        var tool = new Answer(1L, AI_TOOL, "Adobe Firefly를 사용했습니다.", "AI 도구를 사용했나요?", "Adobe Firefly");
+        var context = new Context(1L, "사과와 캔", "s", List.of(tool), List.of(),
+                List.of(new AskedQuestion(AI_TOOL, "AI 도구를 사용했나요?")),
+                List.of(new PreviousTurn(AI_TOOL, "AI 도구를 사용했나요?", "Adobe Firefly를 사용했습니다.")));
+        generations.add(question(AI_OUTPUT_USAGE, "AI 결과를 최종 작품에 활용했는지 알려주세요. (활용을 전제하지 않음).", List.of()));
+        generations.add(question(AI_OUTPUT_USAGE, "AI 결과를 최종 작품에 활용했나요? 활용했다면 어느 부분인가요?", List.of()));
+        reviews.add(JSON.writeValueAsString(Map.of("duplicate", false, "grounded", true)));
+
+        assertEquals("AI 결과를 최종 작품에 활용했나요? 활용했다면 어느 부분인가요?",
+                client.generateQuestion(context, AI_OUTPUT_USAGE).content());
+        assertEquals(1, reviewInputs.size());
+        assertFalse(shows(generationInputs.getFirst().path("focus"), "전제하지"), "focus carries no note to copy");
+    }
+
+    /** Local PR #49 run: every edit question was filed as OTHER by the reviewer and fell back to the fixed one. */
+    @Test void anEditQuestionTheReviewerFilesAsOtherIsStillAccepted() throws IOException {
+        var client = client();
+        generations.add(question(HUMAN_EDITED_EXPRESSION, "그린 뒤에 직접 수정하거나 덧붙인 표현이 있다면 어떻게 작업했나요?", List.of()));
+        reviews.add(humanReview("OTHER", false));
+
+        assertEquals("그린 뒤에 직접 수정하거나 덧붙인 표현이 있다면 어떻게 작업했나요?",
+                client.generateQuestion(afterMixedCreationQuestion(), HUMAN_EDITED_EXPRESSION).content());
+        assertEquals(1, generationInputs.size());
+    }
+
+    @Test void aQuestionMixingNewCreationIntoTheEditFieldStaysRejected() throws IOException {
+        var client = client();
+        generations.add(question(HUMAN_EDITED_EXPRESSION, "새로 그린 요소와 직접 수정한 부분은 무엇인가요?", List.of()));
+        generations.add(question(HUMAN_EDITED_EXPRESSION, "그린 뒤에 직접 바꾼 부분이 있다면 어떻게 바꾸셨나요?", List.of()));
+        reviews.add(humanReview("OTHER", false));
+        reviews.add(humanReview("HUMAN_EDITED_EXPRESSION", false));
+
+        assertEquals("그린 뒤에 직접 바꾼 부분이 있다면 어떻게 바꾸셨나요?",
+                client.generateQuestion(afterMixedCreationQuestion(), HUMAN_EDITED_EXPRESSION).content());
+    }
+
+    /**
+     * Local PR #49 run: a good edit question was rejected only for an unused material link, and the retry without
+     * materials drifted to asking how the creation was drawn. The link is dropped and the question kept instead.
+     */
+    @Test void anUnusedMaterialLinkIsDroppedInsteadOfRejectingTheQuestion() throws IOException {
+        var client = client();
+        var base = afterMixedCreationQuestion();
+        var material = new AiInterviewClient.Evidence("material:2:file:2",
+                com.line4.idea2ip.domain.material.entity.MaterialType.MANUAL_EDIT, "사과 껍질 명암 비교", null, null);
+        var context = new Context(base.projectId(), base.title(), base.snapshotVersion(), base.answers(),
+                List.of(material), base.questions(), base.turns());
+        String edit = "그린 뒤에 직접 바꾸거나 덧붙인 부분은 무엇이고 어떻게 작업했나요?";
+        generations.add(JSON.writeValueAsString(Map.of("target_field", HUMAN_EDITED_EXPRESSION.name(),
+                "question", edit, "source_ids", List.of("material:2:file:2"), "quotes", List.of())));
+        reviews.add(JSON.writeValueAsString(Map.of("actual_field", "HUMAN_EDITED_EXPRESSION",
+                "unsupported_assumption", false, "duplicate", false, "unused_source", true,
+                "misses_clarification", false)));
+
+        var draft = client.generateQuestion(context, HUMAN_EDITED_EXPRESSION);
+
+        assertEquals(edit, draft.content());
+        assertEquals(List.of(), draft.sourceIds());
+        assertEquals(1, generationInputs.size());
+    }
+
     @Test void exhaustedAttemptsAskTheFieldsFixedQuestionInsteadOfFailing() throws IOException {
         var client = client();
         generations.add(question(HUMAN_EDITED_EXPRESSION, "직접 수정한 부분이 있다면 어떻게 작업했나요?", List.of()));
