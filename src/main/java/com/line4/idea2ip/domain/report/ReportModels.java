@@ -83,8 +83,17 @@ public final class ReportModels {
     }
 
     /** profile is null in snapshots stored before it existed. */
+    /**
+     * @param noAiUse the interview settled that no AI tool was used and no confirmed contribution records AI use.
+     *                Absent (null) in snapshots stored before this flag existed.
+     */
     public record InputSnapshot(Input aiInput, List<Confirmed> contributions, String noContributionReason,
-                                List<String> warnings, Profile profile) {}
+                                List<String> warnings, Profile profile, Boolean noAiUse) {
+        public InputSnapshot(Input aiInput, List<Confirmed> contributions, String noContributionReason,
+                             List<String> warnings, Profile profile) {
+            this(aiInput, contributions, noContributionReason, warnings, profile, null);
+        }
+    }
 
     /** Project facts printed in the report as stored, never sent to the AI service. Dates are ISO strings. */
     public record Profile(String artworkType, String projectDescription, String artworkTitle, String artworkDescription,

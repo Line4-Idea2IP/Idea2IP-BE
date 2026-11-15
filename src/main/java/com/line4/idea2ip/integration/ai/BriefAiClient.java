@@ -9,7 +9,14 @@ public interface BriefAiClient {
     record Input(String projectId, String title, String snapshotVersion, List<Source> sources) {}
 
     record Source(String sourceId, String kind, String title, String content, String targetField,
-                  String locator, Long materialId, Long artworkId, Long messageId, String resourceVersion) {}
+                  String locator, Long materialId, Long artworkId, Long messageId, String resourceVersion,
+                  Boolean validatedAnswer) {
+        public Source(String sourceId, String kind, String title, String content, String targetField,
+                      String locator, Long materialId, Long artworkId, Long messageId, String resourceVersion) {
+            this(sourceId, kind, title, content, targetField, locator, materialId, artworkId, messageId,
+                    resourceVersion, null);
+        }
+    }
 
     record CandidateResult(List<Candidate> candidates, List<String> unresolvedFields) {}
 

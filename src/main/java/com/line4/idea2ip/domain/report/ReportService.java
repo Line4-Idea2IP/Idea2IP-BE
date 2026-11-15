@@ -101,7 +101,8 @@ public class ReportService {
             var confirmed = contributions.confirmedSteps(projectId);
             // The checklist covers readiness warnings (missing material types) with more specific actions.
             snapshot = new InputSnapshot(input.capture(project), confirmed, contributions.noContributionReason(projectId),
-                    checklist.items(project, confirmed, contributions.unresolvedFields(projectId)), profile(project));
+                    checklist.items(project, confirmed, contributions.unresolvedFields(projectId)), profile(project),
+                    checklist.noAiUse(project, confirmed));
         }
         if (report == null) report = reports.save(new Report(project));
         return detail(versions.save(new ReportVersion(report, req, revision, snapshot)));

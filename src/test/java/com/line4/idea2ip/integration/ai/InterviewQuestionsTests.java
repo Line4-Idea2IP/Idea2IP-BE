@@ -170,52 +170,34 @@ class InterviewQuestionsTests {
                 List.of(MockAiInterviewClient.baseQuestion(AI_PURPOSE))));
     }
 
-    @Test void liveReplacementSkipsABaseQuestionThatWasAlreadyAsked() throws Exception {
+    @Test void liveQuestionsAreRewrittenAfterValidationAndReturnedVerbatim() throws Exception {
         var mapper = JsonMapper.builder().build();
-        String base = MockAiInterviewClient.baseQuestion(HUMAN_EDITED_EXPRESSION);
-        // The base question already appeared, and the model echoes it.
-        var context = new Context(1L, "가상 작품", "snapshot", List.of(), List.of(),
-                List.of(new AskedQuestion(HUMAN_CREATED_ELEMENT, base)), List.of());
-        var server = echoServer(mapper, base);
-        try {
-            var client = new LlamaInterviewClient("http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
-                    "test-model", mapper, new MockAiInterviewClient());
-            String question = client.generateQuestion(context, HUMAN_EDITED_EXPRESSION).content();
-            assertNotEquals(base, question);
-            assertFalse(InterviewQuestions.alreadyAsked(question, List.of(base)));
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    private static HttpServer echoServer(JsonMapper mapper, String question) throws Exception {
+        String prior = "그 AI 도구를 어떤 목적으로 사용했나요?";
+        String finalQuestion = "비교한 시안 중 최종 작품에 반영한 요소가 있나요?";
+        var turns = List.of(new PreviousTurn(AI_PURPOSE, prior, "손 위치가 다른 시안을 비교했어요."));
+        var context = new Context(1L, "가상 작품", "snapshot",
+                List.of(new Answer(1L, AI_PURPOSE, "손 위치가 다른 시안을 비교했어요.")),
+                List.of(), List.of(new AskedQuestion(AI_PURPOSE, prior)), turns);
+        var requestCount = new java.util.concurrent.atomic.AtomicInteger();
+        var rewriteRequest = new AtomicReference<JsonNode>();
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
-            exchange.getRequestBody().readAllBytes();
-            String draft = mapper.writeValueAsString(Map.of("target_field", "HUMAN_EDITED_EXPRESSION",
-                    "question", question, "source_ids", List.of()));
+            var request = mapper.readTree(exchange.getRequestBody().readAllBytes());
+            String content = switch (requestCount.incrementAndGet()) {
+                case 1 -> mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE", "question", prior,
+                        "source_ids", List.of(), "quotes", List.of()));
+                case 2 -> mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE",
+                        "question", "어떤 이유로 이 AI 도구를 썼나요?", "source_ids", List.of(), "quotes", List.of()));
+                case 3 -> "{\"duplicate\":true,\"grounded\":true}";
+                case 4 -> {
+                    rewriteRequest.set(mapper.readTree(request.path("messages").path(1).path("content").asString()));
+                    yield mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE", "question", finalQuestion,
+                            "source_ids", List.of(), "quotes", List.of()));
+                }
+                default -> "{\"duplicate\":false,\"grounded\":true}";
+            };
             byte[] body = mapper.writeValueAsBytes(Map.of("choices", List.of(Map.of("finish_reason", "stop",
-                    "message", Map.of("content", draft)))));
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            try (var out = exchange.getResponseBody()) { out.write(body); }
-        });
-        server.start();
-        return server;
-    }
-
-    @Test void liveClientSendsEarlierTurnsAndReplacesARepeatedQuestion() throws Exception {
-        var mapper = JsonMapper.builder().build();
-        var context = interviewUpToHumanEdits();
-        String repeated = context.questions().getLast().content();  // the model echoes the previous question
-        var request = new AtomicReference<JsonNode>();
-        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/", exchange -> {
-            request.set(mapper.readTree(exchange.getRequestBody().readAllBytes()));
-            String draft = mapper.writeValueAsString(Map.of("target_field", "HUMAN_EDITED_EXPRESSION",
-                    "question", repeated, "source_ids", List.of()));
-            byte[] body = mapper.writeValueAsBytes(Map.of("choices", List.of(Map.of("finish_reason", "stop",
-                    "message", Map.of("content", draft)))));
+                    "message", Map.of("content", content)))));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             try (var out = exchange.getResponseBody()) { out.write(body); }
@@ -223,19 +205,14 @@ class InterviewQuestionsTests {
         server.start();
         try {
             var client = new LlamaInterviewClient("http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
-                    "test-model", mapper, new MockAiInterviewClient());
-            var draft = client.generateQuestion(context, HUMAN_EDITED_EXPRESSION);
-
-            JsonNode input = mapper.readTree(request.get().path("messages").path(1).path("content").asString());
-            var earlier = new ArrayList<String>();
-            input.path("earlierTurns").forEach(turn -> earlier.add(turn.path("answer").asString()));
-            assertTrue(earlier.contains(OUTPUT_ANSWER), earlier.toString());
-            assertTrue(input.path("recentQuestions").toString().contains(repeated));
-
-            assertEquals(MockAiInterviewClient.baseQuestion(HUMAN_EDITED_EXPRESSION), draft.content());
+                    "test-model", mapper);
+            assertEquals(finalQuestion, client.generateQuestion(context, AI_OUTPUT_USAGE).content());
+            assertEquals(5, requestCount.get());
+            assertEquals("손 위치가 다른 시안을 비교했어요.",
+                    rewriteRequest.get().path("history").path(0).path("answer").asString());
+            assertTrue(rewriteRequest.get().path("validation_feedback").asString().contains("같은 정보"));
         } finally {
             server.stop(0);
         }
     }
-
 }

@@ -24,6 +24,21 @@ class ReportContentAssemblerTests {
         assertTrue(result.sections().get(4).paragraphs().contains(ReportContentAssembler.NO_OFFICIAL_GUIDE));
     }
 
+    @Test void settledNoAiUseReplacesTheDraftsAiSection() {
+        // The draft restates raw answers to the AI tool question; the confirmed "no AI" wins over it.
+        var raw = new Draft("1.0", "live", List.of(
+                new Section("AI_USAGE", "AI 활용", List.of("사용한 AI 도구: 업슴, 네"), List.of("answer:1", "answer:2"))), List.of());
+        var noAi = assembler.assemble(new InputSnapshot(ai, List.of(), null, List.of(), null, true), raw, null, null);
+        var section = noAi.sections().stream().filter(s -> s.sectionKey().equals("AI_USAGE")).findFirst().orElseThrow();
+        assertEquals(List.of(ReportContentAssembler.NO_AI_USE), section.paragraphs());
+        assertTrue(section.sourceIds().isEmpty());
+
+        // Older snapshots (no flag) keep the draft as before.
+        var old = assembler.assemble(new InputSnapshot(ai, List.of(), null, List.of(), null), raw, null, null);
+        assertEquals(List.of("사용한 AI 도구: 업슴, 네"), old.sections().stream()
+                .filter(s -> s.sectionKey().equals("AI_USAGE")).findFirst().orElseThrow().paragraphs());
+    }
+
     @Test void internalInterviewTitlesAreShownInPlainKorean() {
         var answer = new Evidence("answer:8", "USER_STATEMENT", "인터뷰 답변 8 (HUMAN_CREATED_ELEMENT)", "사슬을 구성했습니다.",
                 null, null, null, null, null, null, null, null);
