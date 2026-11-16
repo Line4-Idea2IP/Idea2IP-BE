@@ -151,16 +151,19 @@ public class ReportPdfRenderer {
     private static void body(Layout layout, Section section, Map<String, String> labels, Map<String, Evidence> byId)
             throws IOException {
         var rowLabels = ROW_LABELS.getOrDefault(section.sectionKey(), List.of());
+        // An untitled table carries on into the next paragraph: the overview stores each row as its own paragraph
+        // ("작품명: …", "작품 유형: …"), and they belong in one table. A titled block (one material) ends with its paragraph.
+        var rows = new ArrayList<Row>();
+        String blockTitle = null;
         for (String paragraph : section.paragraphs()) {
             String text = FACT_SECTIONS.contains(section.sectionKey()) ? cite(paragraph, section, labels, byId) : paragraph;
             String[] lines = text.split("\\R", -1);
-            var rows = new ArrayList<Row>();
             // Consecutive plain lines stay one paragraph, so a short block still moves to the next page whole.
             var plain = new ArrayList<String>();
-            String blockTitle = null;
             for (int i = 0; i < lines.length; i++) {
                 Row row = row(lines[i], rowLabels);
                 if (row != null) {
+                    flush(layout, plain);
                     rows.add(row);
                     continue;
                 }
@@ -182,8 +185,13 @@ public class ReportPdfRenderer {
                 }
             }
             flush(layout, plain);
-            if (!rows.isEmpty()) layout.table(blockTitle, rows, Layout.LABEL_WIDTH);
+            if (blockTitle != null && !rows.isEmpty()) {
+                layout.table(blockTitle, rows, Layout.LABEL_WIDTH);
+                rows.clear();
+                blockTitle = null;
+            }
         }
+        if (!rows.isEmpty()) layout.table(blockTitle, rows, Layout.LABEL_WIDTH);
     }
 
     private static void flush(Layout layout, List<String> plain) throws IOException {

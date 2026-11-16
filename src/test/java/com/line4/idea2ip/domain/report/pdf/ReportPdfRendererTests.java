@@ -119,6 +119,54 @@ class ReportPdfRendererTests {
         for (int page = 1; page <= pages; page++) assertTrue(text.contains(page + " / " + pages), "page number " + page);
     }
 
+    // Deployed PDF: the overview stores one row per paragraph, and each row was drawn as its own table.
+    @Test void rowsStoredAsSeparateParagraphsFormOneTable() throws Exception {
+        var renderer = renderer();
+        var overview = new Section("WORK_OVERVIEW", "개요", List.of("작품명: 사과와 캔", "작품 유형: 디지털 일러스트",
+                "주제·기획 의도: 정물 구성"), List.of());
+        var human = new Section("HUMAN_CONTRIBUTION", "인간", List.of("구도 자료 (AI 산출물)\n직접 수정: 캔 테두리를 바꿨습니다.",
+                "직접 창작: 사과 단면을 그렸습니다."), List.of());
+        byte[] bytes = renderer.render("사과와 캔", 1, META, List.of(overview, human), List.of());
+
+        // One table means one label column: its shaded cells stack without gaps.
+        var gaps = new java.util.ArrayList<Float>();
+        try (var pdf = Loader.loadPDF(bytes)) {
+            var cells = new java.util.ArrayList<float[]>();
+            new org.apache.pdfbox.contentstream.PDFGraphicsStreamEngine(pdf.getPage(0)) {
+                private final java.util.List<java.awt.geom.Point2D> corners = new java.util.ArrayList<>();
+                @Override public void appendRectangle(java.awt.geom.Point2D p0, java.awt.geom.Point2D p1,
+                                                      java.awt.geom.Point2D p2, java.awt.geom.Point2D p3) {
+                    corners.clear();
+                    corners.addAll(List.of(p0, p1, p2, p3));
+                }
+                @Override public void fillPath(int windingRule) {
+                    double bottom = corners.stream().mapToDouble(java.awt.geom.Point2D::getY).min().orElse(0);
+                    double top = corners.stream().mapToDouble(java.awt.geom.Point2D::getY).max().orElse(0);
+                    cells.add(new float[]{(float) bottom, (float) top});
+                }
+                @Override public void drawImage(org.apache.pdfbox.pdmodel.graphics.image.PDImage image) {}
+                @Override public void clip(int windingRule) {}
+                @Override public void moveTo(float x, float y) {}
+                @Override public void lineTo(float x, float y) {}
+                @Override public void curveTo(float x1, float y1, float x2, float y2, float x3, float y3) {}
+                @Override public java.awt.geom.Point2D getCurrentPoint() { return new java.awt.geom.Point2D.Float(); }
+                @Override public void closePath() {}
+                @Override public void endPath() {}
+                @Override public void strokePath() {}
+                @Override public void fillAndStrokePath(int windingRule) {}
+                @Override public void shadingFill(org.apache.pdfbox.cos.COSName shadingName) {}
+            }.processPage(pdf.getPage(0));
+            for (int i = 1; i < cells.size(); i++) gaps.add(cells.get(i - 1)[0] - cells.get(i)[1]);
+        }
+        // Overview rows 1-3 touch each other; the human block (rows 4-5) is a separate table below them.
+        assertEquals(4, gaps.size());
+        assertEquals(0f, gaps.get(0), 0.5f);
+        assertEquals(0f, gaps.get(1), 0.5f);
+        assertTrue(gaps.get(2) > 10, "the overview and the material block are separate tables");
+        // The untitled line after the titled block starts its own table instead of joining the material's table.
+        assertTrue(gaps.get(3) > 5, "a row without a title is not added to the previous material's table");
+    }
+
     @Test void onlyTheSectionsOwnLabelsBecomeRows() {
         var labels = ReportPdfRenderer.ROW_LABELS.get("AI_USAGE");
         assertEquals(new ReportPdfRenderer.Row("산출물 설명 (구도 자료)", "시안 4장"),
