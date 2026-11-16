@@ -27,10 +27,15 @@ public final class InterviewQuestionTemplates {
     static final String DEFAULT_REASON = "창작 과정의 해당 항목을 확인합니다.";
     static final String FOLLOW_UP_REASON = "앞선 답변의 구체적인 내용을 확인합니다.";
     static final String CLARIFY_REASON = "앞선 답변에서 확인할 내용이 있습니다.";
+    static final String TOOL_CONFIRMATION_REASON = "말씀하신 도구 이름이 어떤 AI 도구인지 확인합니다.";
     /** Clarification a live answer check returns when the reply could not be quoted; it is an instruction, not a question. */
     static final String CONFIRM_CURRENT_ANSWER = "사용자가 이번 답변에서 언급한 작업을 기준으로 해당 항목을 한 번만 확인하세요. "
             + "해당 작업이 있었는지 묻고, 있었다면 방법을 직접 설명할 수 있게 질문하세요.";
     /** A clarification phrased as an embedded question ("다른 AI 도구를 사용했는지") can be asked as is. */
+    /** A clarification already written as a short question to the user ("어떤 서비스였나요?"). */
+    private static final Pattern ASKABLE_QUESTION = Pattern.compile("^[^\\n‘’“”\"']{2,80}\\?$");
+    /** Wording meant for the question writer, never shown to the user. */
+    private static final Pattern INSTRUCTION = Pattern.compile("확인하세요|질문하세요|사용자|답변자|field|focus");
     private static final Pattern ASKABLE_CLARIFICATION = Pattern.compile("^[^\\n‘’“”\"']{2,80}(?:는지|은지|인지|ㄴ지|한지|했는지|할지|을지|일지)$");
     private static final Pattern TOOL_NAME = Pattern.compile("^[\\p{L}\\p{N} .+\\-]{1,30}$");
 
@@ -47,6 +52,10 @@ public final class InterviewQuestionTemplates {
 
         String latest = context.answers().reversed().stream().filter(answer -> answer.field() == field)
                 .map(Answer::content).findFirst().orElse(null);
+        // "‘소라’라고 하셨는데, OpenAI의 Sora를 말씀하신 게 맞나요?": written in full by the answer check.
+        if (field == InterviewField.AI_TOOL && KnownAiTools.confirming(clarification).isPresent()) {
+            return new QuestionDraft(clarification.strip(), TOOL_CONFIRMATION_REASON, List.of());
+        }
         if (clarification != null && !clarification.isBlank()) {
             var clarifying = clarifying(field, clarification.strip(), latest, asked);
             if (clarifying.isPresent()) return clarifying.get();
@@ -89,8 +98,10 @@ public final class InterviewQuestionTemplates {
                 .filter(state -> state.field() == InterviewField.AI_TOOL
                         && state.status() == InterviewFieldState.Status.COMPLETED)
                 .map(InterviewFieldState::summary)
-                .filter(summary -> summary != null && isToolName(summary.strip()))
-                .map(String::strip)
+                .filter(summary -> summary != null && !summary.isBlank())
+                // A known tool is named the usual way ("제미나이로" → "Gemini"); other names only when they are bare.
+                .map(summary -> KnownAiTools.displayName(summary).orElse(isToolName(summary.strip()) ? summary.strip() : null))
+                .filter(name -> name != null)
                 .findFirst();
     }
 
@@ -114,8 +125,15 @@ public final class InterviewQuestionTemplates {
             return InterviewQuestions.alreadyAsked(question, asked) ? Optional.empty()
                     : Optional.of(new QuestionDraft(question, CONFIRMATION_REASON, List.of()));
         }
-        if (!ASKABLE_CLARIFICATION.matcher(clarification).matches()) return Optional.empty();
-        String question = lead + clarification + " 알려주세요.";
+        String question;
+        if (ASKABLE_CLARIFICATION.matcher(clarification).matches()) {
+            question = lead + clarification + " 알려주세요.";
+        } else if (ASKABLE_QUESTION.matcher(clarification).matches() && !INSTRUCTION.matcher(clarification).find()) {
+            // "어떤 서비스였나요?": a question the check already wrote for the user follows on from their own words.
+            question = lead + clarification;
+        } else {
+            return Optional.empty();
+        }
         return InterviewQuestions.alreadyAsked(question, asked) ? Optional.empty()
                 : Optional.of(new QuestionDraft(question, CLARIFY_REASON, List.of()));
     }

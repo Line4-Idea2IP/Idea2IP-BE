@@ -316,7 +316,8 @@ public class InterviewService {
             // Retries may overlap while the model runs. Under the project lock, only the first decision is stored.
             if (isPending(interview, last, answerId) && last.getEvaluationClarification() == null) {
                 String clarification = nextField(fields) == evaluation.field() ? analysis.clarification() : null;
-                last.recordEvaluation(analysis.evidenceQuote(), clarification);
+                if (analysis.confirmedName()) last.recordConfirmedName(analysis.evidenceQuote());
+                else last.recordEvaluation(analysis.evidenceQuote(), clarification);
                 interview.updateFields(fields);
             }
             return advancePlan(project, interview, last, answerId);

@@ -46,8 +46,10 @@ CHECK_LABELS = {
     "must_ask": "물어야 할 항목을 물음",
     "must_skip": "생략해야 할 항목을 묻지 않음",
     "min_asks": "다시 물어야 할 항목을 다시 물음",
+    "max_asks": "이미 답한 항목을 다시 묻지 않음",
     "ask_limit": f"한 항목 최대 {MAX_ASKS_PER_FIELD}회",
     "final_states": "최종 항목 상태",
+    "final_summaries": "최종 항목 요약",
     "readiness_states": "시작 전 항목 상태",
     "no_repeated_question": "같은 질문 반복 없음 (공백·문장부호 무시)",
     "idempotent_replay": "같은 요청 ID 재전송 시 중복 저장 없음",
@@ -238,12 +240,19 @@ def score(scenario, transcript):
     if scenario.get("minAsks"):
         short = [f"{f} {asks[f]}/{n}" for f, n in scenario["minAsks"].items() if asks[f] < n]
         checks["min_asks"] = (not short, ", ".join(short))
+    if scenario.get("maxAsks"):
+        extra = [f"{f} {asks[f]}/{n}" for f, n in scenario["maxAsks"].items() if asks[f] > n]
+        checks["max_asks"] = (not extra, ", ".join(extra))
     over = [f"{f} {n}회" for f, n in asks.items() if n > MAX_ASKS_PER_FIELD]
     checks["ask_limit"] = (not over, ", ".join(over))
     if scenario.get("expectFinal"):
         wrong = [f"{f}={final.get(f, {}).get('status')}" for f, allowed in scenario["expectFinal"].items()
                  if final.get(f, {}).get("status") not in allowed]
         checks["final_states"] = (not wrong, ", ".join(wrong))
+    if scenario.get("expectSummary"):
+        wrong = [f"{f}={final.get(f, {}).get('summary')!r}" for f, expected in scenario["expectSummary"].items()
+                 if (final.get(f, {}).get("summary") or "").strip() != expected]
+        checks["final_summaries"] = (not wrong, ", ".join(wrong))
     if scenario.get("expectReadiness"):
         before = {s["field"]: s["status"] for s in transcript["readiness"].get("fieldStates", [])}
         wrong = [f"{f}={before.get(f)}" for f, allowed in scenario["expectReadiness"].items()

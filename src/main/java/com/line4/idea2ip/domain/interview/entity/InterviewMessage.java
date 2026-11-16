@@ -80,6 +80,21 @@ public class InterviewMessage extends BaseEntity {
     }
 
     /**
+     * Records a tool name the user confirmed: "네" to "OpenAI의 Sora를 말씀하신 게 맞나요?" is evidence for "Sora",
+     * which the report cites in place of the answer's own words.
+     */
+    public void recordConfirmedName(String name) {
+        if (role != Role.USER || evaluationClarification != null) {
+            throw new IllegalStateException("Only a pending user answer can be evaluated");
+        }
+        if (name == null || name.isBlank() || name.length() > 100) {
+            throw new IllegalArgumentException("Expected a tool name");
+        }
+        validatedEvidenceQuote = name;
+        evaluationClarification = "";
+    }
+
+    /**
      * Narrows the recorded quote to a part of itself, once the rest of the answer turned out to be evidence for
      * other fields: an output-use answer that also says "사과 단면은 직접 그렸고" keeps only its output-use sentences.
      */

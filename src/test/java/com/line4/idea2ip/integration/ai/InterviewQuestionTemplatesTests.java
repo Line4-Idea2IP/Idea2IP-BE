@@ -28,12 +28,17 @@ class InterviewQuestionTemplatesTests {
     @Test void aiQuestionsNameTheToolAlreadyGiven() {
         var draft = InterviewQuestionTemplates.draft(afterTool("스테이블 디퓨젼 썼어요", "스테이블 디퓨젼"), AI_PURPOSE, null);
 
-        assertEquals("스테이블 디퓨젼 도구를 어떤 작업에, 어떤 목적으로 사용했나요?", draft.content());
+        // A known tool is named the usual way, whatever spelling the user wrote.
+        assertEquals("Stable Diffusion 도구를 어떤 작업에, 어떤 목적으로 사용했나요?", draft.content());
+        assertEquals("Gemini 도구를 어떤 작업에, 어떤 목적으로 사용했나요?",
+                InterviewQuestionTemplates.draft(afterTool("제미나이로 했어요", "제미나이로"), AI_PURPOSE, null).content());
+        assertEquals("우리팀툴 도구를 어떤 작업에, 어떤 목적으로 사용했나요?",
+                InterviewQuestionTemplates.draft(afterTool("우리팀툴", "우리팀툴"), AI_PURPOSE, null).content());
     }
 
     @Test void aSentenceIsNeverSlottedInAsAToolName() {
         var draft = InterviewQuestionTemplates.draft(
-                afterTool("Stable Diffusion을 사용했습니다.", "Stable Diffusion을 사용했습니다."), AI_PURPOSE, null);
+                afterTool("그림 앱을 사용했습니다.", "그림 앱을 사용했습니다."), AI_PURPOSE, null);
 
         assertEquals(MockAiInterviewClient.baseQuestion(AI_PURPOSE), draft.content());
         assertFalse(InterviewQuestionTemplates.isToolName("Midjourney로 사과와 캔의 배치 시안을 만들었습니다."));

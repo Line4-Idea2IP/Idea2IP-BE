@@ -2,6 +2,7 @@ package com.line4.idea2ip.integration.ai;
 
 import com.line4.idea2ip.domain.interview.entity.InterviewField;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
+import com.line4.idea2ip.domain.interview.entity.NoAiAnswer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,8 +23,10 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
@@ -46,6 +49,8 @@ class LlamaInterviewClient implements AiInterviewClient {
             예시 답: "챗GPT는 안 썼어요"
             예시 결과: {"intent":"UNRESOLVED","quote":"","clarification":"다른 AI 도구를 사용했는지","missing_details":false}
             답변이 실제 사용한 도구명을 제공하면 의도는 ANSWERED다. quote에는 사용한 도구명 원문만 넣는다.
+            GPT, 지피티, 클로드(Claude), 제미나이(Gemini), 미드저니, SD처럼 널리 쓰는 도구의 약칭·한글 표기도 도구명이다.
+            quote에는 "제미나이로"의 "로"처럼 뒤에 붙은 조사를 넣지 않는다.
             예시 답: "스테이블 디퓨젼 썼어요"
             예시 결과: {"intent":"ANSWERED","quote":"스테이블 디퓨젼","clarification":"","missing_details":false}
             has_previous_evidence가 true이고 같은 항목의 앞선 도구 답을 유지하며 추가 도구만 없다고 하면
@@ -100,7 +105,7 @@ class LlamaInterviewClient implements AiInterviewClient {
             NONE이면 관련 문장이 없거나 추측해야 알 수 있다는 뜻이다. 이때 quote, gap, source는 빈 문자열이다.
             quote에는 해당 항목에 답하는 부분만 연속 원문으로, 오타까지 고치지 말고 그대로 복사한다. 글 전체를 복사하지 않는다.
             source에는 quote를 가져온 글의 source 값을 적는다.
-            AI_TOOL: 사용한 AI 도구 이름만 quote로 적는다.
+            AI_TOOL: 사용한 AI 도구 이름만 조사 없이 quote로 적는다. GPT, 클로드, 제미나이 같은 약칭·한글 표기도 도구 이름이다.
             AI_PURPOSE: AI로 한 작업이나 목적. 도구 이름만 있으면 NONE이다.
             AI_OUTPUT_USAGE: AI 결과를 최종 작품에 넣었는지. 넣지 않았다는 문장도 FOUND다. 사용 목적만 말하면 NONE이다.
             HUMAN_CREATED_ELEMENT: 사용자가 직접 새로 그리거나 만든 요소와 그 방법. AI 사용이나 AI 결과에 관한 문장은 NONE이다.
@@ -131,6 +136,18 @@ class LlamaInterviewClient implements AiInterviewClient {
     private static final Pattern EDITED_WORK = Pattern.compile(
             "수정|고치|고쳤|고친|바꾸|바꾼|바꿨|바꿔|바궈|바궛|바꼈|변경|보정|편집|덧붙|덧칠|덧그|조정|조절|다듬|손질|칠했|칠햇");
     /** "을 사용했습니다", "썻어여": what is left of "<tool>을 사용했습니다" once the tool name is removed. */
+    /** Wording that denies or excludes use ("GPT는 안 썼어요", "제미나이 말고"); such answers stay with the model. */
+    private static final Pattern DENIAL = Pattern.compile("안\\s*(?:썼|씀|쓴|써|쓰|사용|이용|활용)|않|없|말고|빼고|아니");
+    /** Replies to a confirmation question, read from the start of the answer. */
+    private static final Pattern REPLY_YES = Pattern.compile(
+            "\\s*(?:(?:네|넵|넹|넴|예|응|웅|ㅇㅇ|yes|yep|ok|okay|오케이)요?(?![가-힣a-z])"
+                    + "|맞아|맞음|맞습니다|맞네요|맞죠|그래요|그렇습니다|그거요|그거예요)", Pattern.CASE_INSENSITIVE);
+    /** What may follow the everyday word when the user repeats it as the answer ("소라요", "소라 맞아요"). */
+    private static final Pattern REPEATED_ENDING = Pattern.compile(
+            "(?:요|이요|입니다|예요|이에요|맞아요|맞습니다|맞아|맞음|썼어요|썼습니다|사용했어요|사용했습니다)?");
+    private static final Pattern REPLY_NO = Pattern.compile(
+            "\\s*(?:아니요|아니오|아뇨|아니에요|아닙니다|아니|ㄴㄴ|no|nope|틀려요|틀렸어요)[\\s\\p{P}~]*",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern BARE_USE = Pattern.compile(
             "[을를로으이가은는도]?\\s*(?:사용|이용|활용|써|썼|썻|쓰|씀)\\S*|[\\s\\p{P}]+");
     /** Words that make a description say the user did the work, not just what the artwork shows. */
@@ -193,9 +210,11 @@ class LlamaInterviewClient implements AiInterviewClient {
                 .filter(quote -> !quote.isBlank())
                 .toList();
         input.put("has_previous_evidence", !previousEvidence.isEmpty());
+        var confirmed = confirmationReply(answer);
+        if (confirmed.isPresent()) return confirmed.get();
         try {
-            return interpretAnswer(prompt, input, answer, registeredAi, previousEvidence, null,
-                    quote -> AnswerQuotes.locate(quote, List.of(answer.content())));
+            return acceptBareToolName(answer, interpretAnswer(prompt, input, answer, registeredAi, previousEvidence, null,
+                    quote -> AnswerQuotes.locate(quote, List.of(answer.content()))));
         } catch (RestClientResponseException exception) {
             if (!exceedsContextSize(exception)) throw exception;
             log.info("Interview answer exceeded model context: field={} characters={}",
@@ -212,6 +231,113 @@ class LlamaInterviewClient implements AiInterviewClient {
         var availableQuotes = segments.stream().map(AnswerSegment::quote).filter(quote -> !quote.isBlank()).distinct().toList();
         return interpretAnswer(prompt + SEGMENTED_ANSWER_INSTRUCTIONS, input, answer, registeredAi,
                 previousEvidence, availableQuotes, quote -> availableQuotes.contains(quote) ? quote : null);
+    }
+
+    /**
+     * A bare tool name answers the tool question even when the model asks which tool it means: with no registered
+     * tool the model judged "gpt" unresolved ("gpt는 어떤 AI 도구인가요?"), and the user was asked for a tool name
+     * right after giving one. "네", "없음" and other non-names are left to the model's judgment.
+     */
+    static AnswerAnalysis acceptBareToolName(Answer answer, AnswerAnalysis analysis) {
+        if (answer.field() != InterviewField.AI_TOOL || answer.content() == null) return analysis;
+        String content = answer.content();
+        if (KnownAiTools.confirming(answer.question()).isEmpty()) {
+            var ambiguous = ambiguousTool(content, analysis);
+            if (ambiguous.isPresent()) {
+                log.info("Interview tool answer names an everyday word; confirming the tool");
+                String question = KnownAiTools.confirmationQuestion(ambiguous.get());
+                return new AnswerAnalysis(new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW,
+                        "도구 이름 ‘" + ambiguous.get().alias() + "’의 뜻을 확인해야 합니다."), "", question);
+            }
+        }
+        if (analysis.state().status() == COMPLETED) return withEveryKnownTool(content, analysis);
+        if (!analysis.state().needsAnswer()) return analysis;
+        String name = content.strip().replaceFirst("[.!?~]+$", "").strip();
+        if (!name.isEmpty() && InterviewQuestionTemplates.isToolName(name) && !NoAiAnswer.notAToolName(name)) {
+            log.info("Interview tool answer accepted as a bare tool name");
+            return toolAnswer(name);
+        }
+        // A sentence naming a widely used tool ("gpt로 시안을 뽑았어요"), as long as nothing in it denies using one.
+        var mentions = KnownAiTools.find(content);
+        if (mentions.isEmpty() || DENIAL.matcher(content).find() || NoAiAnswer.notAToolName(content)) return analysis;
+        String quote = content.substring(mentions.getFirst().start(), mentions.getLast().end());
+        if (quote.length() > 40) quote = content.substring(mentions.getFirst().start(), mentions.getFirst().end());
+        log.info("Interview tool answer accepted from a known tool name");
+        return toolAnswer(quote);
+    }
+
+    /**
+     * The model quotes one tool name, so "클로드랑 미드저니 썼습니다" came back as "클로드"; the quote is widened to run
+     * from the first to the last known tool the answer names, so no tool the user mentioned is dropped.
+     */
+    private static AnswerAnalysis withEveryKnownTool(String content, AnswerAnalysis analysis) {
+        String quote = analysis.evidenceQuote();
+        var mentions = KnownAiTools.find(content);
+        if (quote == null || quote.isBlank() || mentions.size() < 2 || DENIAL.matcher(content).find()) return analysis;
+        String span = content.substring(mentions.getFirst().start(), mentions.getLast().end());
+        if (span.length() > 40 || span.equals(quote) || !span.contains(quote)) return analysis;
+        return new AnswerAnalysis(new InterviewFieldState(InterviewField.AI_TOOL, COMPLETED, span,
+                analysis.state().closed()), span, null);
+    }
+
+    /**
+     * "소라", "달리로 그렸어요": an everyday word given as the tool. The model took "소라" as written or asked whether
+     * it was a tool at all; either way the user is asked whether they meant the tool ("OpenAI의 Sora"). A completed
+     * answer is confirmed only when its quote is the everyday word; an open one, when nothing in it denies using it.
+     */
+    private static Optional<KnownAiTools.Ambiguous> ambiguousTool(String content, AnswerAnalysis analysis) {
+        if (analysis.state().status() == COMPLETED) return KnownAiTools.ambiguousIn(analysis.evidenceQuote());
+        if (!analysis.state().needsAnswer() || DENIAL.matcher(content).find() || NoAiAnswer.notAToolName(content)) {
+            return Optional.empty();
+        }
+        return KnownAiTools.ambiguousIn(content);
+    }
+
+    /**
+     * The reply to a question confirming an everyday word as a tool. "네", "맞아요", "소라요" settle the tool under its
+     * name; "아니요" alone asks for the tool name; "아니요, 미드저니요" takes the tool named instead. Other replies
+     * are read by the model as usual. Answered before the model, which read a bare "아니요" as "AI 안 썼어요".
+     */
+    static Optional<AnswerAnalysis> confirmationReply(Answer answer) {
+        if (answer.field() != InterviewField.AI_TOOL || answer.content() == null || answer.content().isBlank()) {
+            return Optional.empty();
+        }
+        var asked = KnownAiTools.confirming(answer.question());
+        if (asked.isEmpty()) return Optional.empty();
+        var tool = asked.get();
+        String content = answer.content().strip();
+        String plain = content.toLowerCase(Locale.ROOT).replaceAll("[\\s\\p{P}~]+", "");
+        var others = KnownAiTools.find(content).stream().filter(mention -> !mention.name().equals(tool.name())).toList();
+        var noReply = REPLY_NO.matcher(content);
+        if (noReply.lookingAt()) {
+            if (!others.isEmpty()) {
+                String quote = content.substring(others.getFirst().start(), others.getLast().end());
+                if (quote.length() > 40) quote = content.substring(others.getFirst().start(), others.getFirst().end());
+                return Optional.of(toolAnswer(quote));
+            }
+            String rest = content.substring(noReply.end()).replaceFirst("[.!?~]+$", "").strip();
+            if (rest.isEmpty()) {
+                return Optional.of(new AnswerAnalysis(new InterviewFieldState(InterviewField.AI_TOOL, NEEDS_REVIEW,
+                        "확인한 도구가 아니라고 답했습니다."), "", "어떤 AI 도구를 사용했나요?"));
+            }
+            if (InterviewQuestionTemplates.isToolName(rest) && !NoAiAnswer.notAToolName(rest)
+                    && !rest.contains(tool.alias())) {
+                return Optional.of(toolAnswer(rest));
+            }
+            return Optional.empty();
+        }
+        if (!others.isEmpty() || DENIAL.matcher(content).find()) return Optional.empty();
+        boolean yes = REPLY_YES.matcher(content).lookingAt()
+                || (plain.startsWith(tool.alias()) && REPEATED_ENDING.matcher(plain.substring(tool.alias().length())).matches())
+                || KnownAiTools.find(content).stream().anyMatch(mention -> mention.name().equals(tool.name()));
+        if (!yes) return Optional.empty();
+        log.info("Interview tool confirmed by the user");
+        return Optional.of(new AnswerAnalysis(new InterviewFieldState(InterviewField.AI_TOOL, COMPLETED, tool.name()),
+                tool.name(), null, true));
+    }
+
+    private static AnswerAnalysis toolAnswer(String quote) {
+        return new AnswerAnalysis(new InterviewFieldState(InterviewField.AI_TOOL, COMPLETED, quote), quote, null);
     }
 
     @Override
@@ -294,6 +420,9 @@ class LlamaInterviewClient implements AiInterviewClient {
         boolean mixed = quote.chars().anyMatch(c -> c < 128 && Character.isLetter(c))
                 && quote.chars().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
         if (!mixed && InterviewQuestionTemplates.isToolName(quote)) return quote.strip();
+        // A known tool written in Korean ("제미나이로 시안을") is taken by its name, without the particle.
+        var known = KnownAiTools.find(quote);
+        if (!known.isEmpty()) return quote.substring(known.getFirst().start(), known.getFirst().end());
         var matcher = LATIN_TOOL.matcher(quote);
         String longest = null;
         while (matcher.find()) {
