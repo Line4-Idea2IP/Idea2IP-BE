@@ -119,7 +119,7 @@ public final class InterviewQuestionTemplates {
                                                       List<String> asked) {
         String quote = InterviewQuestions.quote(latest);
         // "ㅁㄹ... ㅅㅈ ㅇㄱ?" reads as nothing when quoted back; such a reply is not repeated to the user.
-        String lead = readable(quote) ? "‘" + quote + "’라고 하셨는데, " : "";
+        String lead = readable(quote) ? InterviewQuestions.quoted(quote) + " 하셨는데, " : "";
         if (clarification.equals(CONFIRM_CURRENT_ANSWER)) {
             String question = lead + confirmation(field);
             return InterviewQuestions.alreadyAsked(question, asked) ? Optional.empty()

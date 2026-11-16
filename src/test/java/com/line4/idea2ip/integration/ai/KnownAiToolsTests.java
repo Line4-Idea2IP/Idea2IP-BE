@@ -52,6 +52,12 @@ class KnownAiToolsTests {
         assertEquals(Optional.of(sora), KnownAiTools.confirming("좋아요. " + question), "a lead-in does not hide it");
         assertTrue(KnownAiTools.confirming("‘소라’라고 하셨는데, 어떤 AI 기능을 사용했나요?").isEmpty());
         assertTrue(KnownAiTools.confirming(null).isEmpty());
+        var bing = KnownAiTools.ambiguousIn("빙").orElseThrow();
+        String bingQuestion = KnownAiTools.confirmationQuestion(bing);
+        assertTrue(bingQuestion.startsWith("‘빙’이라고 하셨는데, Microsoft의 Bing Image Creator를"), bingQuestion);
+        assertEquals(Optional.of(bing), KnownAiTools.confirming(bingQuestion));
+        assertEquals(Optional.of(bing), KnownAiTools.confirming(bingQuestion.replace("’이라고", "’라고")),
+                "a confirmation asked before the fix is still read");
         assertEquals(Optional.of("Bing Image Creator"), KnownAiTools.displayName("Bing"));
     }
 }
