@@ -20,7 +20,8 @@ class ReportContentAssemblerTests {
                 result.sections().stream().map(Section::sectionKey).toList());
         var human = result.sections().get(2);
         assertEquals("인간의 창작적 표현 부분 (사용자 확인)", human.title());
-        assertEquals(List.of("사용자 수정 단계\n직접 창작: 확정 창작\n직접 수정: 확정 수정"), human.paragraphs());
+        // Template order: edits, then new creations.
+        assertEquals(List.of("사용자 수정 단계\n직접 수정: 확정 수정\n직접 창작: 확정 창작"), human.paragraphs());
         assertTrue(result.sections().get(4).paragraphs().contains(ReportContentAssembler.NO_OFFICIAL_GUIDE));
     }
 

@@ -153,7 +153,17 @@ public class ReportService {
         return new Work(versionId, version.getVersionNo(), token, version.getOperation(), version.getInputSnapshot(),
                 version.getReportContent(), base == null ? null : base.getReportContent(),
                 base == null ? null : base.getInputSnapshot(), version.getEdits(), version.getTemplateVersion(),
-                version.getCreatedAt());
+                version.getCreatedAt(), lastEditedAt(version));
+    }
+
+    /** When the user last saved an edit that this version carries: the newest EDIT version in its base chain. */
+    private java.time.LocalDateTime lastEditedAt(ReportVersion version) {
+        var seen = new java.util.HashSet<Long>();
+        for (ReportVersion current = version; current != null && seen.add(current.getId());
+             current = current.getBaseVersionId() == null ? null : versions.findById(current.getBaseVersionId()).orElse(null)) {
+            if (current.getOperation() == Operation.EDIT) return current.getCreatedAt();
+        }
+        return null;
     }
 
     @Transactional
@@ -304,5 +314,5 @@ public class ReportService {
 
     record Work(Long id, int versionNo, UUID token, Operation operation, InputSnapshot input, Content draft,
                 Content base, InputSnapshot baseInput, List<SectionEdit> edits, String templateVersion,
-                java.time.LocalDateTime createdAt) {}
+                java.time.LocalDateTime createdAt, java.time.LocalDateTime lastEditedAt) {}
 }
