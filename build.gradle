@@ -48,3 +48,14 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// Downloads what `bootJar` needs before the sources are copied, so the Docker build keeps the
+// dependencies in their own cached layer and only goes to Maven Central when the build files change.
+tasks.register('resolveDependencies') {
+	description = 'Downloads the dependencies bootJar needs.'
+	def wanted = ['compileClasspath', 'annotationProcessor', 'runtimeClasspath', 'productionRuntimeClasspath']
+	def classpaths = wanted.findAll { configurations.names.contains(it) }.collect { configurations.named(it) }
+	doLast {
+		classpaths.each { it.get().files }
+	}
+}
