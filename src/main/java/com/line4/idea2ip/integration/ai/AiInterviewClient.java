@@ -53,7 +53,15 @@ public interface AiInterviewClient {
     }
 
     /** A null evidence quote leaves legacy/mock source handling in place; empty marks a live reply with no source. */
-    record AnswerAnalysis(InterviewFieldState state, String evidenceQuote, String clarification) {}
+    /**
+     * {@code confirmedName}: the user said "네" to a question naming the tool ("OpenAI의 Sora를 말씀하신 게 맞나요?"),
+     * so {@code evidenceQuote} is that name rather than a quote of the answer.
+     */
+    record AnswerAnalysis(InterviewFieldState state, String evidenceQuote, String clarification, boolean confirmedName) {
+        public AnswerAnalysis(InterviewFieldState state, String evidenceQuote, String clarification) {
+            this(state, evidenceQuote, clarification, false);
+        }
+    }
 
     /** {@code fields}: the field states when the context was taken (empty when unknown). */
     record Context(Long projectId, String title, String snapshotVersion,

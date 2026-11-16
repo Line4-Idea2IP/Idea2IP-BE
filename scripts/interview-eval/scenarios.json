@@ -117,6 +117,40 @@
       "expectFinal": {"AI_TOOL": ["NOT_APPLICABLE"], "AI_PURPOSE": ["NOT_APPLICABLE"], "AI_OUTPUT_USAGE": ["NOT_APPLICABLE"]}
     },
     {
+      "id": "short-tool-name",
+      "title": "도구 이름을 약칭 한 단어로만 답함",
+      "phase": 0,
+      "answers": {"AI_TOOL": ["gpt"]},
+      "mustSkip": [],
+      "mustAsk": ["AI_PURPOSE", "AI_OUTPUT_USAGE"],
+      "maxAsks": {"AI_TOOL": 1},
+      "expectFinal": {"AI_TOOL": ["COMPLETED"]}
+    },
+    {
+      "id": "ambiguous-tool-yes",
+      "title": "일상어와 겹치는 도구 이름(소라)을 확인 질문에 ‘네’로 답함",
+      "phase": 0,
+      "answers": {"AI_TOOL": ["소라", "네"]},
+      "mustSkip": [],
+      "mustAsk": ["AI_PURPOSE", "AI_OUTPUT_USAGE"],
+      "minAsks": {"AI_TOOL": 2},
+      "maxAsks": {"AI_TOOL": 2},
+      "expectFinal": {"AI_TOOL": ["COMPLETED"]},
+      "expectSummary": {"AI_TOOL": "Sora"}
+    },
+    {
+      "id": "ambiguous-tool-no",
+      "title": "일상어와 겹치는 도구 이름(소라)을 확인 질문에서 다른 도구로 정정함",
+      "phase": 0,
+      "answers": {"AI_TOOL": ["소라", "아니요, 미드저니요"]},
+      "mustSkip": [],
+      "mustAsk": ["AI_PURPOSE", "AI_OUTPUT_USAGE"],
+      "minAsks": {"AI_TOOL": 2},
+      "maxAsks": {"AI_TOOL": 2},
+      "expectFinal": {"AI_TOOL": ["COMPLETED"]},
+      "expectSummary": {"AI_TOOL": "미드저니"}
+    },
+    {
       "id": "unreadable",
       "title": "첫 답변을 알아볼 수 없음",
       "phase": 0,
