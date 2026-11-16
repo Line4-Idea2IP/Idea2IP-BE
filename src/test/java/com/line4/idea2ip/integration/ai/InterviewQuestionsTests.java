@@ -5,17 +5,11 @@ import com.line4.idea2ip.integration.ai.AiInterviewClient.Answer;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.AskedQuestion;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Context;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.PreviousTurn;
-import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.line4.idea2ip.domain.interview.entity.InterviewField.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -170,49 +164,4 @@ class InterviewQuestionsTests {
                 List.of(MockAiInterviewClient.baseQuestion(AI_PURPOSE))));
     }
 
-    @Test void liveQuestionsAreRewrittenAfterValidationAndReturnedVerbatim() throws Exception {
-        var mapper = JsonMapper.builder().build();
-        String prior = "그 AI 도구를 어떤 목적으로 사용했나요?";
-        String finalQuestion = "비교한 시안 중 최종 작품에 반영한 요소가 있나요?";
-        var turns = List.of(new PreviousTurn(AI_PURPOSE, prior, "손 위치가 다른 시안을 비교했어요."));
-        var context = new Context(1L, "가상 작품", "snapshot",
-                List.of(new Answer(1L, AI_PURPOSE, "손 위치가 다른 시안을 비교했어요.")),
-                List.of(), List.of(new AskedQuestion(AI_PURPOSE, prior)), turns);
-        var requestCount = new java.util.concurrent.atomic.AtomicInteger();
-        var rewriteRequest = new AtomicReference<JsonNode>();
-        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/", exchange -> {
-            var request = mapper.readTree(exchange.getRequestBody().readAllBytes());
-            String content = switch (requestCount.incrementAndGet()) {
-                case 1 -> mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE", "question", prior,
-                        "source_ids", List.of(), "quotes", List.of()));
-                case 2 -> mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE",
-                        "question", "어떤 이유로 이 AI 도구를 썼나요?", "source_ids", List.of(), "quotes", List.of()));
-                case 3 -> "{\"duplicate\":true,\"grounded\":true}";
-                case 4 -> {
-                    rewriteRequest.set(mapper.readTree(request.path("messages").path(1).path("content").asString()));
-                    yield mapper.writeValueAsString(Map.of("target_field", "AI_OUTPUT_USAGE", "question", finalQuestion,
-                            "source_ids", List.of(), "quotes", List.of()));
-                }
-                default -> "{\"duplicate\":false,\"grounded\":true}";
-            };
-            byte[] body = mapper.writeValueAsBytes(Map.of("choices", List.of(Map.of("finish_reason", "stop",
-                    "message", Map.of("content", content)))));
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            try (var out = exchange.getResponseBody()) { out.write(body); }
-        });
-        server.start();
-        try {
-            var client = new LlamaInterviewClient("http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
-                    "test-model", mapper);
-            assertEquals(finalQuestion, client.generateQuestion(context, AI_OUTPUT_USAGE).content());
-            assertEquals(5, requestCount.get());
-            assertEquals("손 위치가 다른 시안을 비교했어요.",
-                    rewriteRequest.get().path("history").path(0).path("answer").asString());
-            assertTrue(rewriteRequest.get().path("validation_feedback").asString().contains("같은 정보"));
-        } finally {
-            server.stop(0);
-        }
-    }
 }

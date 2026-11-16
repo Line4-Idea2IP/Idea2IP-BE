@@ -183,12 +183,6 @@ final class InterviewQuestions {
         return word.endsWith("께서") || word.endsWith("가") || word.endsWith("이");
     }
 
-    static boolean mentionsRelatedWork(Context context, InterviewField field) {
-        List<String> words = workWords(field);
-        return !words.isEmpty() && earlierTurns(context, field).stream()
-                .anyMatch(turn -> words.stream().anyMatch(turn.answer()::contains));
-    }
-
     private static List<String> workWords(InterviewField field) {
         return switch (field) {
             case HUMAN_EDITED_EXPRESSION -> EDIT_WORDS;
