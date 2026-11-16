@@ -203,26 +203,41 @@ final class InterviewQuestions {
     static String opening(InterviewField field, Related related) {
         if (related.ownWork()) return opening(field, related.statement());
         return switch (field) {
-            case HUMAN_EDITED_EXPRESSION -> "‘" + related.statement() + OPENING_EDIT_WHO_TAIL;
-            case HUMAN_CREATED_ELEMENT -> "‘" + related.statement() + OPENING_CREATE_WHO_TAIL;
+            case HUMAN_EDITED_EXPRESSION -> quoted(related.statement()) + OPENING_EDIT_WHO_TAIL;
+            case HUMAN_CREATED_ELEMENT -> quoted(related.statement()) + OPENING_CREATE_WHO_TAIL;
             case AI_TOOL, AI_PURPOSE, AI_OUTPUT_USAGE -> MockAiInterviewClient.baseQuestion(field);
         };
     }
 
     static String opening(InterviewField field, String statement) {
         return switch (field) {
-            case HUMAN_EDITED_EXPRESSION -> "‘" + statement + OPENING_EDIT_TAIL;
-            case HUMAN_CREATED_ELEMENT -> "‘" + statement + OPENING_CREATE_TAIL;
+            case HUMAN_EDITED_EXPRESSION -> quoted(statement) + OPENING_EDIT_TAIL;
+            case HUMAN_CREATED_ELEMENT -> quoted(statement) + OPENING_CREATE_TAIL;
             case AI_TOOL, AI_PURPOSE, AI_OUTPUT_USAGE -> MockAiInterviewClient.baseQuestion(field);
         };
     }
 
-    private static final String OPENING_EDIT_TAIL = "’라고 하셨는데, 어떤 부분을 어떻게 바꾸셨나요?";
-    private static final String OPENING_CREATE_TAIL = "’라고 하셨는데, 그 요소를 어떤 방식으로 만드셨나요?";
+    /**
+     * The user's words quoted back with the particle their last syllable takes: "‘빙’이라고", "‘소라’라고".
+     * Text ending in a non-Hangul letter, digit or symbol takes "라고".
+     */
+    static String quoted(String said) {
+        return "‘" + said + "’" + (endsWithFinalConsonant(said) ? "이라고" : "라고");
+    }
+
+    static boolean endsWithFinalConsonant(String text) {
+        if (text == null || text.isEmpty()) return false;
+        char last = text.charAt(text.length() - 1);
+        return last >= 0xAC00 && last <= 0xD7A3 && (last - 0xAC00) % 28 != 0;
+    }
+
+    private static final Pattern QUOTE_END = Pattern.compile("’(?:이)?라고 하셨는데");
+    private static final String OPENING_EDIT_TAIL = " 하셨는데, 어떤 부분을 어떻게 바꾸셨나요?";
+    private static final String OPENING_CREATE_TAIL = " 하셨는데, 그 요소를 어떤 방식으로 만드셨나요?";
     private static final String OPENING_EDIT_WHO_TAIL =
-            "’라고 하셨는데, 이 수정은 직접 하신 건가요? 직접 하셨다면 어떤 부분을 어떻게 바꾸셨는지 알려주세요.";
+            " 하셨는데, 이 수정은 직접 하신 건가요? 직접 하셨다면 어떤 부분을 어떻게 바꾸셨는지 알려주세요.";
     private static final String OPENING_CREATE_WHO_TAIL =
-            "’라고 하셨는데, 이 요소는 직접 만드신 건가요? 직접 만드셨다면 어떤 방식으로 만드셨는지 알려주세요.";
+            " 하셨는데, 이 요소는 직접 만드신 건가요? 직접 만드셨다면 어떤 방식으로 만드셨는지 알려주세요.";
 
     /** Whether a question is an opening built on an earlier statement for this field. */
     static boolean isOpeningQuestion(InterviewField field, String question) {
@@ -236,8 +251,8 @@ final class InterviewQuestions {
 
     /** The quoted statement of an opening question, e.g. "색상과 표정은 직접 수정했어요". */
     static String openingStatement(String question) {
-        int end = question.indexOf("’라고 하셨는데");
-        return end > 1 ? question.substring(1, end) : question;
+        var end = QUOTE_END.matcher(question);
+        return end.find() && end.start() > 1 ? question.substring(1, end.start()) : question;
     }
 
     /** The first sentence of an answer for quoting, without its final punctuation and at most 50 characters. */

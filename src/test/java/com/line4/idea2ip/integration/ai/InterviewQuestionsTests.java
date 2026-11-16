@@ -164,4 +164,24 @@ class InterviewQuestionsTests {
                 List.of(MockAiInterviewClient.baseQuestion(AI_PURPOSE))));
     }
 
+    // Deployed interview: "‘빙’라고 하셨는데" — a syllable with a final consonant takes "이라고".
+    @Test void aQuoteTakesTheParticleItsLastSyllableNeeds() {
+        assertEquals("‘빙’이라고", InterviewQuestions.quoted("빙"));
+        assertEquals("‘그림 프로그램’이라고", InterviewQuestions.quoted("그림 프로그램"));
+        assertEquals("‘소라’라고", InterviewQuestions.quoted("소라"));
+        assertEquals("‘색을 바꿨어요’라고", InterviewQuestions.quoted("색을 바꿨어요"));
+        assertEquals("‘gpt’라고", InterviewQuestions.quoted("gpt"));
+        assertEquals("‘달리3’라고", InterviewQuestions.quoted("달리3"));
+    }
+
+    @Test void anOpeningIsReadBackWhicheverParticleItUsed() {
+        String question = InterviewQuestions.opening(HUMAN_EDITED_EXPRESSION, "캔 뚜껑 색을 바꾼 부분");
+
+        assertTrue(question.startsWith("‘캔 뚜껑 색을 바꾼 부분’이라고 하셨는데, "), question);
+        assertTrue(InterviewQuestions.isOpeningQuestion(HUMAN_EDITED_EXPRESSION, question));
+        assertEquals("캔 뚜껑 색을 바꾼 부분", InterviewQuestions.openingStatement(question));
+        String stored = "‘캔 뚜껑 색을 바꿨어요’라고 하셨는데, 어떤 부분을 어떻게 바꾸셨나요?";
+        assertTrue(InterviewQuestions.isOpeningQuestion(HUMAN_EDITED_EXPRESSION, stored), "questions saved before the fix");
+        assertEquals("캔 뚜껑 색을 바꿨어요", InterviewQuestions.openingStatement(stored));
+    }
 }

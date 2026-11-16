@@ -68,9 +68,9 @@ enum InterviewSupplement {
         String said = InterviewQuestions.quote(previousAnswer);
         if (said.isEmpty()) return question;
         return switch (this) {
-            case CREATIVE_CHOICE -> "‘" + said + "’라고 하셨는데, 그렇게 정한 이유가 있나요? "
+            case CREATIVE_CHOICE -> InterviewQuestions.quoted(said) + " 하셨는데, 그렇게 정한 이유가 있나요? "
                     + "색이나 위치처럼 직접 고른 기준이 있다면 함께 알려주세요. 따로 정한 기준이 없다면 없다고 알려주세요.";
-            case PRODUCTION_STAGE -> "‘" + said + "’라고 하셨는데, 그 AI 결과는 아이디어 구상, 구도 결정, "
+            case PRODUCTION_STAGE -> InterviewQuestions.quoted(said) + " 하셨는데, 그 AI 결과는 아이디어 구상, 구도 결정, "
                     + "최종 작품 제작 중 어느 단계에서 사용했나요?";
         };
     }

@@ -62,7 +62,7 @@ public final class KnownAiTools {
     private static final Pattern AMBIGUOUS_END = Pattern.compile(
             "(?:이랑|랑|으로|로|를|을|이|가|도|하고|와|과|이요|요|만|에서|입니다|이에요|예요)(?![가-힣])"
                     + "|사용|이용|활용|썼|썻|써|씀|쓰|(?![가-힣])");
-    private static final Pattern CONFIRMATION = Pattern.compile("‘([^’]{1,10})’라고 하셨는데, .{1,60}를 말씀하신 게 맞나요\\?");
+    private static final Pattern CONFIRMATION = Pattern.compile("‘([^’]{1,10})’(?:이)?라고 하셨는데, .{1,60}를 말씀하신 게 맞나요\\?");
 
     private KnownAiTools() {}
 
@@ -119,7 +119,7 @@ public final class KnownAiTools {
 
     /** "‘소라’라고 하셨는데, OpenAI의 Sora를 말씀하신 게 맞나요? …": asked before an everyday word counts as the tool. */
     static String confirmationQuestion(Ambiguous tool) {
-        return "‘" + tool.alias() + "’라고 하셨는데, " + tool.described()
+        return InterviewQuestions.quoted(tool.alias()) + " 하셨는데, " + tool.described()
                 + "를 말씀하신 게 맞나요? 맞다면 ‘네’, 아니라면 사용한 도구 이름을 알려주세요.";
     }
 

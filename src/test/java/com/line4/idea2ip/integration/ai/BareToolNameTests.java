@@ -91,7 +91,7 @@ class BareToolNameTests {
 
         var draft = InterviewQuestionTemplates.draft(context, AI_TOOL, "어떤 AI 기능을 사용했나요?");
 
-        assertEquals("‘그림 프로그램’라고 하셨는데, 어떤 AI 기능을 사용했나요?", draft.content());
+        assertEquals("‘그림 프로그램’이라고 하셨는데, 어떤 AI 기능을 사용했나요?", draft.content());
         assertEquals(InterviewQuestionTemplates.CLARIFY_REASON, draft.reason());
     }
 
