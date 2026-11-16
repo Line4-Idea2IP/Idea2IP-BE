@@ -37,8 +37,9 @@ class ReportContentAssembler {
             var fact = materialOf(step, facts);
             String header = stepHeader(step, fact);
             var humanLines = new ArrayList<String>();
-            step.content().humanCreatedElements().forEach(text -> humanLines.add("직접 창작: " + text));
+            // Template order: what the user changed, then what they made new.
             step.content().humanEdits().forEach(text -> humanLines.add("직접 수정: " + text));
+            step.content().humanCreatedElements().forEach(text -> humanLines.add("직접 창작: " + text));
             if (!humanLines.isEmpty()) human.add(paragraph(header, humanLines));
             var usage = step.content().aiUsage();
             if (usage != null) {
@@ -95,8 +96,9 @@ class ReportContentAssembler {
             } else {
                 overview.addAll(artwork.stream().map(Source::content).toList());
             }
+            // The template's overview is a fixed set of rows; the RAG draft's overview statements are not appended.
             var ids = new LinkedHashSet<>(artwork.stream().map(Source::sourceId).toList());
-            if (aiOverview != null && !aiOverview.sourceIds().isEmpty()) {
+            if (profile == null && aiOverview != null && !aiOverview.sourceIds().isEmpty()) {
                 overview.addAll(aiOverview.paragraphs());
                 ids.addAll(aiOverview.sourceIds());
             }
@@ -108,7 +110,7 @@ class ReportContentAssembler {
         var references = profile == null
                 ? sources.values().stream().filter(source -> !"OFFICIAL_GUIDE".equals(source.kind()))
                         .map(source -> SourceLabels.kind(source.kind()) + " · " + SourceLabels.title(source)).toList()
-                : references(profile, input.contributions(), sources.values());
+                : references(profile, input.contributions());
         byKey.put(SectionKey.EVIDENCE_SUMMARY.name(), section(SectionKey.EVIDENCE_SUMMARY, references, evidenceIds));
 
         var guidance = byKey.get(SectionKey.GAPS_AND_GUIDANCE.name());
@@ -162,7 +164,7 @@ class ReportContentAssembler {
     private static final List<String> STAGES = List.of("INITIAL_SKETCH", "AI_ASSISTED", "MANUAL_EDIT");
 
     /** Materials in production order (date, then stage, then the user's order), then the final artwork. */
-    private static List<String> references(Profile profile, List<Confirmed> steps, Collection<Evidence> sources) {
+    private static List<String> references(Profile profile, List<Confirmed> steps) {
         var ordered = new ArrayList<>(profile.materials() == null ? List.<MaterialFact>of() : profile.materials());
         ordered.sort(Comparator.comparing(MaterialFact::productionDate, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparingInt(fact -> STAGES.indexOf(fact.type()) < 0 ? STAGES.size() : STAGES.indexOf(fact.type()))
@@ -174,14 +176,15 @@ class ReportContentAssembler {
             entry.add("제작일: " + (fact.productionDate() == null ? "미입력" : fact.productionDate())
                     + " · 첨부 파일 " + fact.fileCount() + "개");
             if (hasText(fact.description())) entry.add("설명: " + excerpt(fact.description(), 300));
-            if (hasText(fact.usedAi())) entry.add("사용 도구: " + fact.usedAi());
             var work = linkedWork(fact.materialId(), steps);
             if (!work.isEmpty()) entry.add("연결된 작업: " + String.join(", ", work));
             lines.add(String.join("\n", entry));
         }
-        if (profile.artworkTitle() != null) lines.add((lines.size() + 1) + ". [최종 작품] " + profile.artworkTitle());
-        long answers = sources.stream().filter(source -> "USER_STATEMENT".equals(source.kind())).count();
-        if (answers > 0) lines.add("인터뷰 답변 " + answers + "건 (사용자 진술) — 아래 출처 세부 정보 참고");
+        if (profile.artworkTitle() != null) {
+            String header = (lines.size() + 1) + ". [최종 작품] " + profile.artworkTitle();
+            lines.add(hasText(profile.artworkDescription())
+                    ? header + "\n설명: " + excerpt(profile.artworkDescription(), 300) : header);
+        }
         if (lines.isEmpty()) lines.add("등록된 창작 과정 자료가 없습니다.");
         return lines;
     }
@@ -190,8 +193,7 @@ class ReportContentAssembler {
     private static String aiParagraph(Set<String> tools, Set<String> purposes, Set<String> outputs,
                                       Collection<MaterialFact> materials) {
         var lines = new ArrayList<String>();
-        var related = materials.stream().map(fact -> fact.title() + " (" + SourceLabels.materialType(fact.type())
-                + (fact.productionDate() == null ? "" : " · " + fact.productionDate()) + ")").toList();
+        var related = materials.stream().map(fact -> fact.title() + " (" + SourceLabels.materialType(fact.type()) + ")").toList();
         if (!related.isEmpty()) lines.add("관련 자료: " + String.join(", ", related));
         lines.add("도구: " + (tools.isEmpty() ? "미확인" : String.join(", ", tools)));
         // The material description is the user's own account of what the AI produced.
@@ -230,12 +232,11 @@ class ReportContentAssembler {
                 .filter(Objects::nonNull).findFirst().orElse(null);
     }
 
-    /** "구도 자료 (AI 산출물 · 2026-11-01)"; null for interview-only steps whose titles are internal. */
+    /** "구도 자료 (AI 산출물)"; null for interview-only steps whose titles are internal. */
     private static String stepHeader(Confirmed step, MaterialFact fact) {
         if (SourceLabels.isInterviewTitle(step.title())) return null;
         if (fact == null) return step.title();
-        return step.title() + " (" + SourceLabels.materialType(fact.type())
-                + (fact.productionDate() == null ? "" : " · " + fact.productionDate()) + ")";
+        return step.title() + " (" + SourceLabels.materialType(fact.type()) + ")";
     }
 
     private static String paragraph(String header, List<String> lines) {

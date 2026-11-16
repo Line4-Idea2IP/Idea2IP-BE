@@ -39,6 +39,7 @@ Docker 이미지 빌드와 미니 PC 배포 절차는 [Docker 배포 안내](dep
 기여 후보 생성과 리포트 생성은 서버가 백그라운드에서 처리합니다. 기본 AI 모드는 `mock`입니다. 실제 생성에는 `BRIEF_AI_MODE=live`, `BRIEF_AI_BASE_URL`과 FastAPI 설정에 맞는 `BRIEF_AI_TOKEN`을 지정합니다.
 
 - `BRIEF_PDF_FONT`에는 한글 글리프를 포함한 TrueType 폰트 파일의 경로를 지정합니다. Windows에서는 기본으로 맑은 고딕을 사용합니다. Linux 배포 환경에는 서버가 읽을 수 있는 폰트를 제공해야 합니다.
+- 제목과 표 라벨은 굵은 글꼴로 그립니다. `BRIEF_PDF_FONT_BOLD`를 비워 두면 `BRIEF_PDF_FONT` 옆의 굵은 글꼴(`NanumGothicBold.ttf`, `malgunbd.ttf`)을 찾아 쓰고, 없으면 일반 글꼴로 그립니다. Docker 이미지에는 두 글꼴이 모두 들어 있습니다.
 - `BRIEF_PDF_DIR`은 비공개 PDF 저장 디렉터리입니다. 기본값은 `private/report-pdfs`입니다. 배포 시 서버가 읽고 쓸 수 있는 영속 디렉터리로 연결합니다. 여러 백엔드 인스턴스를 운영하는 경우 같은 저장소를 사용합니다.
 
 ## ✨ 주요 기능

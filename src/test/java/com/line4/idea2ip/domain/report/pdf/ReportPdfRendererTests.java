@@ -48,8 +48,9 @@ class ReportPdfRendererTests {
         var meta = new ReportPdfRenderer.Meta(LocalDate.of(2026, 11, 12), Set.of("WORK_OVERVIEW"));
         String text = text(renderer.render("가상 작품", 2, meta, List.of(overview, ai), List.of(artwork)));
 
-        assertTrue(text.contains("생성일 2026-11-12  ·  사용자 수정 내용 포함"));
-        assertTrue(text.contains("1. 신청할 저작물 전체 개요 (사용자 수정)"));
+        assertTrue(text.contains("생성일 2026-11-12 · 사용자 수정 있음"));
+        assertTrue(text.contains("1. 신청할 저작물 전체 개요"));
+        assertFalse(text.contains("(사용자 수정)"));
         assertTrue(text.contains("출처: [1] · 첨부자료 기반"));
         assertTrue(text.contains("2. 활용된 생성형 AI 산출물"));
         assertTrue(text.contains("근거: 미확인"));
@@ -93,7 +94,60 @@ class ReportPdfRendererTests {
         assertTrue(crossedPage, "no run placed the block at a page boundary");
     }
 
+    @Test void templateLayoutDrawsRowsBlockTitlesAndPageNumbers() throws Exception {
+        var renderer = renderer();
+        var tool = new Evidence("answer:42", "USER_STATEMENT", "사용한 AI 도구", "Stable Diffusion", null,
+                null, null, null, null, null, null, null);
+        var overview = new Section("WORK_OVERVIEW", "개요", List.of("작품명: 사과와 캔\n작품 유형: 디지털 일러스트"), List.of());
+        var ai = new Section("AI_USAGE", "AI", List.of("관련 자료: 구도 자료 (AI 산출물)\n도구: Stable Diffusion"), List.of("answer:42"));
+        var human = new Section("HUMAN_CONTRIBUTION", "인간", List.of("구도 자료 (AI 산출물)\n직접 수정: 캔 테두리를 바꿨습니다."), List.of());
+        var gaps = new Section("GAPS_AND_GUIDANCE", "보완", List.of("1. 제작일이 없는 자료가 있습니다.", "공식 지침: 판본이 연결되지 않았습니다."), List.of());
+        var meta = new ReportPdfRenderer.Meta(LocalDate.of(2026, 11, 16), Set.of("AI_USAGE"),
+                java.time.LocalDateTime.of(2026, 11, 16, 14, 5));
+        byte[] bytes = renderer.render("사과와 캔", 2, meta, List.of(overview, ai, human, gaps), List.of(tool));
+        String text = text(bytes);
+        int pages;
+        try (var pdf = Loader.loadPDF(bytes)) { pages = pdf.getNumberOfPages(); }
+
+        assertTrue(text.contains("사과와 캔 | v2"));
+        assertTrue(text.contains("생성일 2026-11-16 · 사용자 수정 있음 (2026-11-16 14:05)"));
+        assertTrue(text.contains("작품명 사과와 캔"), "label and value share a table row");
+        assertTrue(text.contains("도구 Stable Diffusion [1]"), "citations stay inside the value cell");
+        assertTrue(text.contains("구도 자료 (AI 산출물)\n직접 수정 캔 테두리를 바꿨습니다."));
+        assertTrue(text.contains("공식 지침: 판본이 연결되지 않았습니다."));
+        assertTrue(text.contains("[1] 사용자 진술 — 사용한 AI 도구"));
+        for (int page = 1; page <= pages; page++) assertTrue(text.contains(page + " / " + pages), "page number " + page);
+    }
+
+    @Test void onlyTheSectionsOwnLabelsBecomeRows() {
+        var labels = ReportPdfRenderer.ROW_LABELS.get("AI_USAGE");
+        assertEquals(new ReportPdfRenderer.Row("산출물 설명 (구도 자료)", "시안 4장"),
+                ReportPdfRenderer.row("산출물 설명 (구도 자료): 시안 4장", labels));
+        // A sentence the user wrote with a colon stays a paragraph.
+        assertNull(ReportPdfRenderer.row("참고: 시안은 작품에 넣지 않았습니다.", labels));
+        assertNull(ReportPdfRenderer.row("도구: Midjourney", ReportPdfRenderer.ROW_LABELS.get("HUMAN_CONTRIBUTION")));
+    }
+
+    @Test void editNoteShowsWhenTheEditWasSaved() {
+        assertEquals("사용자 수정 없음", ReportPdfRenderer.editedNote(new ReportPdfRenderer.Meta(null, Set.of())));
+        assertEquals("사용자 수정 있음", ReportPdfRenderer.editedNote(new ReportPdfRenderer.Meta(null, Set.of("AI_USAGE"))));
+        assertEquals("사용자 수정 있음 (2026-11-16 09:30)", ReportPdfRenderer.editedNote(new ReportPdfRenderer.Meta(
+                null, Set.of("AI_USAGE"), java.time.LocalDateTime.of(2026, 11, 16, 9, 30))));
+    }
+
+    @Test void theBoldFaceIsFoundNextToTheRegularOne(@org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        Path nanum = Files.createFile(dir.resolve("NanumGothic.ttf"));
+        assertNull(ReportPdfRenderer.boldFont(nanum, ""), "no bold file: headings fall back to the regular face");
+        Path bold = Files.createFile(dir.resolve("NanumGothicBold.ttf"));
+        assertEquals(bold, ReportPdfRenderer.boldFont(nanum, ""));
+        Path malgun = Files.createFile(dir.resolve("malgun.ttf"));
+        Path malgunBold = Files.createFile(dir.resolve("malgunbd.ttf"));
+        assertEquals(malgunBold, ReportPdfRenderer.boldFont(malgun, null));
+        assertEquals(bold, ReportPdfRenderer.boldFont(malgun, bold.toString()), "a configured path wins");
+    }
+
     private String text(byte[] bytes) throws Exception {
-        try (var pdf = Loader.loadPDF(bytes)) { return new PDFTextStripper().getText(pdf); }
+        // The stripper ends lines with the platform separator; compare with "\n" everywhere.
+        try (var pdf = Loader.loadPDF(bytes)) { return new PDFTextStripper().getText(pdf).replace("\r\n", "\n"); }
     }
 }

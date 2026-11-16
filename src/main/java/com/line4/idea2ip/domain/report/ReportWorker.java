@@ -49,7 +49,7 @@ class ReportWorker {
                 return;
             }
             var meta = new ReportPdfRenderer.Meta(work.createdAt() == null ? null : work.createdAt().toLocalDate(),
-                    java.util.Set.copyOf(content.editedSectionKeys()));
+                    java.util.Set.copyOf(content.editedSectionKeys()), work.lastEditedAt());
             var bytes = renderer.render(work.input().aiInput().title(), work.versionNo(), meta, content.sections(), content.sources());
             var stored = pdfs.write(work.id(), work.token(), bytes);
             if (!service.publish(work, stored)) pdfs.discard(stored.key());

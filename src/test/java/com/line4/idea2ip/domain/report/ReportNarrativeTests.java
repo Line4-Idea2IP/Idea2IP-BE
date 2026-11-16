@@ -46,7 +46,7 @@ class ReportNarrativeTests {
     }
 
     @Test void aiUsageLinksStageOutputAndFinalUse() {
-        assertEquals(List.of("관련 자료: 구도 자료 (AI 산출물 · 2026-11-01)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
+        assertEquals(List.of("관련 자료: 구도 자료 (AI 산출물)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
                 + "\n사용 목적: 손의 배치 시안 비교\n최종 작품 반영: 미확인"), sections(profile).get(1).paragraphs());
     }
 
@@ -63,7 +63,7 @@ class ReportNarrativeTests {
         var input = new InputSnapshot(new Input("3", "사슬과 푸른 시계", "v1", List.of(artwork)), split, null, List.of(), profile);
         var content = new ReportContentAssembler().assemble(input, new Draft("1.0", "live", List.of(), List.of()), null, null);
         var aiSection = content.sections().get(1);
-        assertEquals(List.of("관련 자료: 구도 자료 (AI 산출물 · 2026-11-01)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
+        assertEquals(List.of("관련 자료: 구도 자료 (AI 산출물)\n도구: Stable Diffusion\n산출물 설명: 손 배치 시안 4장"
                 + "\n사용 목적: 손의 배치 시안 비교\n최종 작품 반영: 손 배치 아이디어만 참고"), aiSection.paragraphs());
         assertFalse(aiSection.paragraphs().getFirst().contains("미확인"));
         // Quotes survive in the stored sources so the PDF can cite each line.
@@ -72,19 +72,21 @@ class ReportNarrativeTests {
     }
 
     @Test void humanContributionNamesTheMaterialAndStage() {
-        assertEquals(List.of("색 대비 자료 (직접 수정본 · 2026-11-03)\n직접 수정: 시계판을 칠했습니다."),
+        assertEquals(List.of("색 대비 자료 (직접 수정본)\n직접 수정: 시계판을 칠했습니다."),
                 sections(profile).get(2).paragraphs());
     }
 
     @Test void referencesFollowProductionOrderWithLinkedWork() {
         var references = sections(profile).get(3).paragraphs();
+        // Template rows only: the tool is shown in the AI section, not repeated here.
         assertEquals("1. [AI 산출물] 구도 자료\n제작일: 2026-11-01 · 첨부 파일 2개\n설명: 손 배치 시안 4장"
-                + "\n사용 도구: Stable Diffusion\n연결된 작업: AI 활용", references.get(0));
+                + "\n연결된 작업: AI 활용", references.get(0));
         assertEquals("2. [직접 수정본] 색 대비 자료\n제작일: 2026-11-03 · 첨부 파일 1개\n설명: 시계 색을 비교함"
                 + "\n연결된 작업: 직접 수정 1건", references.get(1));
         assertEquals("3. [초기 스케치] 스케치\n제작일: 미입력 · 첨부 파일 0개", references.get(2));
-        assertEquals("4. [최종 작품] 사슬과 푸른 시계", references.get(3));
-        assertEquals("인터뷰 답변 3건 (사용자 진술) — 아래 출처 세부 정보 참고", references.get(4));
+        assertEquals("4. [최종 작품] 사슬과 푸른 시계\n설명: 완성작", references.get(3));
+        // No "인터뷰 답변 n건" line: it counted sources, not answers, and the source table lists them.
+        assertEquals(4, references.size());
     }
 
     @Test void snapshotsWithoutProfileKeepTheEarlierLayout() {

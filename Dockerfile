@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl fonts-nanu
     && rm -rf /var/lib/apt/lists/* \
     && font="$(find /usr/share/fonts -name NanumGothic.ttf -print -quit)" \
     && test -n "$font" && install -D -m 644 "$font" /opt/idea2ip/NanumGothic.ttf \
+    && bold="$(find /usr/share/fonts -name NanumGothicBold.ttf -print -quit)" \
+    && test -n "$bold" && install -D -m 644 "$bold" /opt/idea2ip/NanumGothicBold.ttf \
     && install -d -o 10001 -g 10001 /data/uploads /data/report-pdfs
 WORKDIR /app
 COPY --from=build /src/build/libs/*.jar app.jar
