@@ -3,10 +3,12 @@ package com.line4.idea2ip.integration.ai;
 import com.line4.idea2ip.domain.artwork.entity.FinalArtwork;
 import com.line4.idea2ip.domain.artwork.repository.FinalArtworkRepository;
 import com.line4.idea2ip.domain.interview.entity.InterviewField;
+import com.line4.idea2ip.domain.interview.entity.InterviewFieldState;
 import com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Status;
 import com.line4.idea2ip.domain.interview.entity.InterviewMessage;
 import com.line4.idea2ip.domain.interview.entity.InterviewMessage.Role;
 import com.line4.idea2ip.domain.interview.repository.AiInterviewRepository;
+import com.line4.idea2ip.domain.interview.repository.InterviewEvidenceRepository;
 import com.line4.idea2ip.domain.interview.repository.InterviewMessageRepository;
 import com.line4.idea2ip.domain.material.entity.CreativeMaterial;
 import com.line4.idea2ip.domain.material.entity.MaterialType;
@@ -30,6 +32,7 @@ public class ProjectBriefInput {
     private final InterviewMessageRepository messages;
     private final CreativeMaterialRepository materials;
     private final FinalArtworkRepository artworks;
+    private final InterviewEvidenceRepository evidence;
 
     public Input capture(Project project) {
         Long projectId = project.getProjectId();
@@ -62,27 +65,47 @@ public class ProjectBriefInput {
                         quote == null ? message.getContent() : quote, field(message.getTargetField()), locator, materialId, null,
                         message.getMessageId(), null, quote == null ? null : true));
             }
-            var answeredFields = history.stream().filter(message -> message.getRole() == Role.USER)
-                    .map(InterviewMessage::getTargetField).collect(Collectors.toSet());
-            // A field completed from an answer to another field has no answer of its own. Its summary is a span of
-            // that earlier answer, so the answer is cited again under the field it settled.
-            for (var state : interview.getFieldStates()) {
-                if (state.status() != Status.COMPLETED || state.summary() == null || state.summary().isBlank()
-                        || answeredFields.contains(state.field())) continue;
-                history.stream().filter(message -> message.getRole() == Role.USER
-                                && message.getContent().contains(state.summary()))
-                        .findFirst().ifPresent(message -> {
-                            String locator = "인터뷰 답변 " + message.getSequenceNo() + " (" + state.field() + ")";
-                            Long materialId = linkedMaterial(message.getReplyToQuestion().getSourceIds(),
-                                    state.field(), materialTypes);
-                            sources.add(new Source("answer:" + message.getMessageId() + ":" + state.field(),
-                                    "USER_STATEMENT", locator, state.summary(), field(state.field()), locator,
-                                    materialId, null, message.getMessageId(), null, true));
-                        });
+            var answers = history.stream().filter(message -> message.getRole() == Role.USER)
+                    .collect(Collectors.toMap(InterviewMessage::getMessageId, message -> message));
+            var ledger = evidence.findAllByProject_ProjectIdOrderByEvidenceIdAsc(projectId);
+            if (ledger.stream().noneMatch(row -> row.getMessageId() != null)) {
+                legacySettledSources(interview.getFieldStates(), history, materialTypes, sources);
+                return;
+            }
+            // A sentence that answered a field it was not asked about is cited again under that field.
+            for (var row : ledger) {
+                var message = row.getMessageId() == null ? null : answers.get(row.getMessageId());
+                if (message == null || row.getField() == message.getTargetField()) continue;
+                sources.add(settledSource(message, row.getField(), row.getQuote(), materialTypes));
             }
         });
         return new Input(projectId.toString(), project.getTitle(), "project-" + projectId + "-r" + project.getInputRevision(),
                 List.copyOf(sources));
+    }
+
+    /**
+     * Interviews settled before the evidence ledger existed: a completed field without an answer of its own is
+     * cited under the earlier answer that contains its summary.
+     */
+    private void legacySettledSources(List<InterviewFieldState> states, List<InterviewMessage> history,
+                                      Map<Long, MaterialType> materialTypes, List<Source> sources) {
+        var answeredFields = history.stream().filter(message -> message.getRole() == Role.USER)
+                .map(InterviewMessage::getTargetField).collect(Collectors.toSet());
+        for (var state : states) {
+            if (state.status() != Status.COMPLETED || state.summary() == null || state.summary().isBlank()
+                    || answeredFields.contains(state.field())) continue;
+            history.stream().filter(message -> message.getRole() == Role.USER && message.getContent().contains(state.summary()))
+                    .findFirst()
+                    .ifPresent(message -> sources.add(settledSource(message, state.field(), state.summary(), materialTypes)));
+        }
+    }
+
+    private Source settledSource(InterviewMessage message, InterviewField field, String quote,
+                                 Map<Long, MaterialType> materialTypes) {
+        String locator = "인터뷰 답변 " + message.getSequenceNo() + " (" + field + ")";
+        Long materialId = linkedMaterial(message.getReplyToQuestion().getSourceIds(), field, materialTypes);
+        return new Source("answer:" + message.getMessageId() + ":" + field, "USER_STATEMENT", locator, quote,
+                field(field), locator, materialId, null, message.getMessageId(), null, true);
     }
 
     /**

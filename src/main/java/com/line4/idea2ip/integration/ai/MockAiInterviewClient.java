@@ -12,7 +12,7 @@ import static com.line4.idea2ip.domain.interview.entity.InterviewFieldState.Stat
 
 @Component
 class MockAiInterviewClient implements AiInterviewClient {
-    /** Neutral default question for a field; also the example given to the live model. */
+    /** Neutral default question for a field. */
     static String baseQuestion(InterviewField field) {
         return switch (field) {
             case AI_TOOL -> "창작 과정에서 어떤 AI 도구를 사용했나요?";
@@ -30,39 +30,6 @@ class MockAiInterviewClient implements AiInterviewClient {
             case HUMAN_CREATED_ELEMENT -> MaterialType.INITIAL_SKETCH;
             case HUMAN_EDITED_EXPRESSION -> MaterialType.MANUAL_EDIT;
         };
-    }
-
-    @Override
-    public QuestionDraft generateQuestion(Context context, InterviewField field) {
-        boolean followUp = context.answers().stream().anyMatch(answer -> answer.field() == field);
-        var supplement = InterviewSupplement.next(field, InterviewSupplement.answersFor(context, field));
-        // Same rules as the live client: a repeated follow-up never reuses an earlier question of this field.
-        var recent = InterviewQuestions.recentAndSameField(context, field);
-        String latest = context.answers().reversed().stream().filter(answer -> answer.field() == field)
-                .map(Answer::content).findFirst().orElse(null);
-        var related = followUp ? java.util.Optional.<InterviewQuestions.Related>empty()
-                : InterviewQuestions.related(context, field);
-        if (related.isPresent()) {
-            return new QuestionDraft(InterviewQuestions.unused(field, InterviewQuestions.opening(field, related.get()), recent),
-                    InterviewQuestions.OPENING_REASON, List.of());
-        }
-        String prompt = followUp ? InterviewQuestions.followUp(field, recent, supplement, latest)
-                : InterviewQuestions.unused(field, baseQuestion(field), recent);
-        if (InterviewQuestions.isClosingQuestion(field, prompt)) {
-            return new QuestionDraft(prompt, InterviewQuestions.CLOSING_REASON, List.of());
-        }
-        if (InterviewQuestions.isNoAiConfirmation(prompt)) {
-            return new QuestionDraft(prompt, InterviewQuestions.NO_AI_CONFIRMATION_REASON, List.of());
-        }
-        MaterialType referenceType = referenceType(field);
-        List<String> sourceIds = context.evidence().stream()
-                .filter(source -> source.type() == referenceType)
-                .map(Evidence::sourceId)
-                .limit(1)
-                .toList();
-        String reason = supplement.map(value -> value.reason)
-                .orElse(followUp ? "앞선 답변의 구체적인 내용을 확인합니다." : "창작 과정의 해당 항목을 확인합니다.");
-        return new QuestionDraft(prompt, reason, sourceIds);
     }
 
     @Override

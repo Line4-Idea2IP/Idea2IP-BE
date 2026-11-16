@@ -40,6 +40,18 @@ final class AnswerQuotes {
         return best == null || best.isBlank() ? null : best.strip();
     }
 
+    /** Whether two quotes share words: one contains the other, or they sit on overlapping parts of one text. */
+    static boolean overlaps(String quote, String other, List<String> texts) {
+        if (quote.contains(other) || other.contains(quote)) return true;
+        for (String text : texts) {
+            int start = text.indexOf(quote);
+            int otherStart = text.indexOf(other);
+            if (start >= 0 && otherStart >= 0
+                    && start < otherStart + other.length() && otherStart < start + quote.length()) return true;
+        }
+        return false;
+    }
+
     private record Match(String span, int distance) {}
 
     /**
