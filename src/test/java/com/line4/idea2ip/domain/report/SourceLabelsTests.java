@@ -12,6 +12,12 @@ class SourceLabelsTests {
         assertEquals("시안이 남아 있습니다.", SourceLabels.asSentence("시안이 남아 있고 "));
     }
 
+    // Deployed report: "직접 수정: 은빛 캔의 명암은 손으로 조정했습니다" had no full stop.
+    @Test void aSentenceQuotedWithoutItsFullStopGetsOne() {
+        assertEquals("은빛 캔의 명암은 손으로 조정했습니다.", SourceLabels.asSentence("은빛 캔의 명암은 손으로 조정했습니다"));
+        assertEquals("직접 그렸다.", SourceLabels.asSentence("직접 그렸다 "));
+    }
+
     @Test void finishedSentencesAndOtherEndingsStayAsWritten() {
         assertEquals("사과 단면을 직접 그렸습니다.", SourceLabels.asSentence("사과 단면을 직접 그렸습니다."));
         assertEquals("사과를 그리고", SourceLabels.asSentence("사과를 그리고"));
