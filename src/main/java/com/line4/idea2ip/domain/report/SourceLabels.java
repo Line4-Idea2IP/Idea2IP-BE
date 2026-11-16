@@ -28,6 +28,8 @@ public final class SourceLabels {
                 return value.substring(0, value.length() - 1) + "습니다.";
             }
         }
+        // A quote taken up to, but not including, its full stop: "…조정했습니다" → "…조정했습니다.".
+        if (value.length() >= 2 && value.endsWith("다")) return value + ".";
         return text;
     }
 

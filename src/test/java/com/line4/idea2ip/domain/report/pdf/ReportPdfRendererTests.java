@@ -174,6 +174,11 @@ class ReportPdfRendererTests {
 
         assertEquals("직접 창작: 사과 단면은 직접 그렸습니다. [1]", ReportPdfRenderer.cite("직접 창작: 사과 단면은 직접 그렸습니다.",
                 section, java.util.Map.of("answer:7", "[1]"), java.util.Map.of("answer:7", created)));
+        var edited = new Evidence("answer:8", "USER_STATEMENT", "직접 수정한 부분", "은빛 캔의 명암은 손으로 조정했습니다", null,
+                null, null, null, null, null, null, null);
+        var edits = new Section("HUMAN_CONTRIBUTION", "인간", List.of(), List.of("answer:8"));
+        assertEquals("직접 수정: 은빛 캔의 명암은 손으로 조정했습니다. [1]", ReportPdfRenderer.cite("직접 수정: 은빛 캔의 명암은 손으로 조정했습니다.",
+                edits, java.util.Map.of("answer:8", "[1]"), java.util.Map.of("answer:8", edited)));
     }
 
     @Test void onlyTheSectionsOwnLabelsBecomeRows() {
