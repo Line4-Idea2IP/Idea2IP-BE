@@ -33,7 +33,12 @@ MAX_TURNS = 16
 REQUEST_TIMEOUT = 360
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 NON_WORD = re.compile(r"[^\w]", re.UNICODE)
-QUOTED = re.compile(r"[‘'“\"]([^’'”\"]{2,})[’'”\"]")
+# A question quotes the user as "‘…’라고 하셨는데"; other quoted text is a reply hint such as ‘없음’.
+QUOTED = re.compile(r"[‘'“\"]([^’'”\"]{2,})[’'”\"]\s*(?:이)?라고 하셨")
+# Lead-in the backend puts before a question (fields it already confirmed, a move to the user's own work);
+# repeated questions are compared without it.
+LEAD_IN = re.compile(r"^(?:(?:말씀하신 내용으로|작품 설명에서) [^.?!]{1,160}까지 확인했습니다\. )?"
+                     r"(?:이제 직접 작업하신 부분을 여쭤볼게요\. |조금만 더 여쭤볼게요\. )?")
 
 CHECK_LABELS = {
     "http_ok": "모든 요청 첫 시도 성공 (503 포함 오류 0건)",
@@ -47,7 +52,7 @@ CHECK_LABELS = {
     "no_repeated_question": "같은 질문 반복 없음 (공백·문장부호 무시)",
     "idempotent_replay": "같은 요청 ID 재전송 시 중복 저장 없음",
     "verbatim_quotes": "질문 속 인용은 사용자 원문",
-    "settled_grounded": "자동 완료 근거는 원문이고 다른 항목과 겹치지 않음",
+    "settled_grounded": "자동 완료 근거는 사용자 원문이고 다른 항목과 겹치지 않음",
 }
 
 
@@ -247,7 +252,7 @@ def score(scenario, transcript):
 
     seen, repeats = {}, []
     for turn in turns:
-        key = normalized(turn["question"])
+        key = normalized(LEAD_IN.sub("", turn["question"], count=1))
         if key in seen:
             repeats.append(f"{seen[key]}·{turn['field']}: {turn['question'][:40]}")
         seen.setdefault(key, turn["field"])
@@ -271,8 +276,10 @@ def score(scenario, transcript):
         summary = (state.get("summary") or "").strip()
         if asks[field] or state.get("status") != "COMPLETED" or not summary:
             continue
-        if not any(summary in answer for answer in answers):
-            ungrounded.append(f"{field} 근거가 답변에 없음")
+        # Evidence may come from the user's answers or from the project and artwork descriptions they wrote.
+        written = answers + [scenario["project"].get("description", ""), scenario["artwork"].get("description", "")]
+        if not any(summary in text for text in written):
+            ungrounded.append(f"{field} 근거가 답변·설명에 없음")
         for other in FIELDS[1:]:
             other_summary = (final.get(other, {}).get("summary") or "").strip()
             if other != field and other_summary and (summary in other_summary or other_summary in summary):
