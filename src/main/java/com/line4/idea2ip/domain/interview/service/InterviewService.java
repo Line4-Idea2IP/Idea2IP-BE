@@ -206,7 +206,12 @@ public class InterviewService {
         Answer answer = evaluated.answer();
         Long answerId = answer.messageId();
         var findings = findInAnswer(evaluated.context(), answer, evaluated.fields());
-        var fields = applyFindings(evaluated.fields(), findings);
+        // Sentences another field took as its evidence leave the asked field's quote, so the report shows each once.
+        String quote = answer.evidenceQuote();
+        String narrowed = answer.field() == InterviewField.AI_TOOL ? quote
+                : AnswerScope.withoutClaimedSentences(quote, findings.stream().map(Finding::quote).toList());
+        boolean narrow = narrowed != null && !narrowed.equals(quote);
+        var fields = narrowSummary(applyFindings(evaluated.fields(), findings), answer.field(), quote, narrow ? narrowed : quote);
         var settled = findings.stream().map(Finding::field).toList();
         InterviewField target = nextField(fields);
         String clarification = target == answer.field()
@@ -223,6 +228,7 @@ public class InterviewService {
                 return state(projectId, interview, last);
             }
             // Saved together with the next question, which ends the pending state: retries never record twice.
+            if (narrow) last.narrowEvidence(narrowed);
             recordEvidence(project, last, findings);
             if (!fields.equals(interview.getFieldStates())) {
                 interview.updateFields(fields);
@@ -272,6 +278,14 @@ public class InterviewService {
                     List.of());
         }
         return result;
+    }
+
+    /** The asked field's summary follows its narrowed quote; summaries written in other words are left as they are. */
+    private static List<InterviewFieldState> narrowSummary(List<InterviewFieldState> fields, InterviewField field,
+                                                           String quote, String narrowed) {
+        if (quote == null || quote.equals(narrowed)) return fields;
+        return fields.stream().map(state -> state.field() == field && quote.equals(state.summary())
+                ? new InterviewFieldState(state.field(), state.status(), narrowed, state.closed()) : state).toList();
     }
 
     private void recordEvidence(Project project, InterviewMessage answer, List<Finding> findings) {

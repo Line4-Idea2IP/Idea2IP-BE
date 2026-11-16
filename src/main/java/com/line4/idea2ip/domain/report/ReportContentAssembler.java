@@ -38,8 +38,8 @@ class ReportContentAssembler {
             String header = stepHeader(step, fact);
             var humanLines = new ArrayList<String>();
             // Template order: what the user changed, then what they made new.
-            step.content().humanEdits().forEach(text -> humanLines.add("직접 수정: " + text));
-            step.content().humanCreatedElements().forEach(text -> humanLines.add("직접 창작: " + text));
+            step.content().humanEdits().forEach(text -> humanLines.add("직접 수정: " + SourceLabels.asSentence(text)));
+            step.content().humanCreatedElements().forEach(text -> humanLines.add("직접 창작: " + SourceLabels.asSentence(text)));
             if (!humanLines.isEmpty()) human.add(paragraph(header, humanLines));
             var usage = step.content().aiUsage();
             if (usage != null) {
@@ -204,9 +204,9 @@ class ReportContentAssembler {
                     + excerpt(fact.description(), 300));
         }
         if (purposes.isEmpty()) lines.add("사용 목적: 미확인");
-        else purposes.forEach(purpose -> lines.add("사용 목적: " + purpose));
+        else purposes.forEach(purpose -> lines.add("사용 목적: " + SourceLabels.asSentence(purpose)));
         if (outputs.isEmpty()) lines.add("최종 작품 반영: 미확인");
-        else outputs.forEach(output -> lines.add("최종 작품 반영: " + output));
+        else outputs.forEach(output -> lines.add("최종 작품 반영: " + SourceLabels.asSentence(output)));
         return String.join("\n", lines);
     }
 

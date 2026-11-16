@@ -79,6 +79,18 @@ public class InterviewMessage extends BaseEntity {
         evaluationClarification = clarification == null ? "" : clarification;
     }
 
+    /**
+     * Narrows the recorded quote to a part of itself, once the rest of the answer turned out to be evidence for
+     * other fields: an output-use answer that also says "사과 단면은 직접 그렸고" keeps only its output-use sentences.
+     */
+    public void narrowEvidence(String quote) {
+        if (role != Role.USER || validatedEvidenceQuote == null || quote == null || quote.isBlank()
+                || !validatedEvidenceQuote.contains(quote)) {
+            throw new IllegalArgumentException("Expected a part of the recorded quote");
+        }
+        validatedEvidenceQuote = quote;
+    }
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false)
     private List<String> sourceIds;

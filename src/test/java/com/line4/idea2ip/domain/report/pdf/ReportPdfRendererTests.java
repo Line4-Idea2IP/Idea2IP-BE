@@ -167,6 +167,15 @@ class ReportPdfRendererTests {
         assertTrue(gaps.get(3) > 5, "a row without a title is not added to the previous material's table");
     }
 
+    @Test void aClauseShownAsASentenceStillCitesItsAnswer() {
+        var created = new Evidence("answer:7", "USER_STATEMENT", "직접 창작한 부분", "사과 단면은 직접 그렸고", null,
+                null, null, null, null, null, null, null);
+        var section = new Section("HUMAN_CONTRIBUTION", "인간", List.of(), List.of("answer:7"));
+
+        assertEquals("직접 창작: 사과 단면은 직접 그렸습니다. [1]", ReportPdfRenderer.cite("직접 창작: 사과 단면은 직접 그렸습니다.",
+                section, java.util.Map.of("answer:7", "[1]"), java.util.Map.of("answer:7", created)));
+    }
+
     @Test void onlyTheSectionsOwnLabelsBecomeRows() {
         var labels = ReportPdfRenderer.ROW_LABELS.get("AI_USAGE");
         assertEquals(new ReportPdfRenderer.Row("산출물 설명 (구도 자료)", "시안 4장"),

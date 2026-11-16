@@ -243,7 +243,9 @@ public class ReportPdfRenderer {
             String value = (colon < 0 ? line : line.substring(colon + 2)).strip();
             var parts = List.of(value.split(", "));
             var numbers = quoted.stream()
-                    .filter(source -> value.equals(source.quote().strip()) || parts.contains(source.quote().strip()))
+                    // A clause quote is shown completed as a sentence ("…그렸습니다."); it still cites the same answer.
+                    .filter(source -> value.equals(source.quote().strip()) || parts.contains(source.quote().strip())
+                            || value.equals(SourceLabels.asSentence(source.quote()).strip()))
                     .map(source -> labels.get(source.sourceId())).filter(Objects::nonNull).distinct()
                     .sorted(Comparator.comparingInt(ReportPdfRenderer::number)).toList();
             lines.add(numbers.isEmpty() ? line : line + " " + String.join("", numbers));

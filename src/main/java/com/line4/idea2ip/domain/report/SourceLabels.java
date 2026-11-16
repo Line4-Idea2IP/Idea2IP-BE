@@ -14,6 +14,23 @@ public final class SourceLabels {
 
     private SourceLabels() {}
 
+    /**
+     * A clause cut out of a longer sentence ends like one in the report: "사과 단면은 직접 그렸고" becomes
+     * "사과 단면은 직접 그렸습니다.". Only a past or 있다 stem before "고" (final consonant ㅆ) is completed, so
+     * "그리고" or a finished sentence is left as written.
+     */
+    public static String asSentence(String text) {
+        if (text == null) return null;
+        String value = text.strip();
+        if (value.length() >= 2 && value.endsWith("고")) {
+            char stem = value.charAt(value.length() - 2);
+            if (stem >= 0xAC00 && stem <= 0xD7A3 && (stem - 0xAC00) % 28 == 20) {
+                return value.substring(0, value.length() - 1) + "습니다.";
+            }
+        }
+        return text;
+    }
+
     /** Tag matching the UI legend ("사용자 진술", "첨부자료 기반", ...). */
     public static String tag(String kind) {
         return switch (kind) {
