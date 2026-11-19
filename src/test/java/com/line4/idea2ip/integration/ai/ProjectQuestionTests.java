@@ -85,6 +85,16 @@ class ProjectQuestionTests {
         }
     }
 
+    // Deployed: "‘캔 뚜껑 색 수정 전후 자료’ 자료에" repeated the word.
+    @Test void aTitleEndingInMaterialIsNotFollowedByItAgain() {
+        var materials = List.of(new Evidence("material:1:file:1", MaterialType.AI_ASSISTED, "사과와 캔 배치 비교 자료", "", null),
+                new Evidence("material:2:file:2", MaterialType.MANUAL_EDIT, "캔 뚜껑 색 수정 전후 자료", "", null));
+        var context = context(materials, Work.NONE, InterviewFieldState.initialStates());
+
+        assertEquals("‘사과와 캔 배치 비교 자료’를 만들 때 어떤 AI 도구를 사용했나요?", opening(context, AI_TOOL));
+        assertTrue(opening(context, HUMAN_EDITED_EXPRESSION).startsWith("‘캔 뚜껑 색 수정 전후 자료’에 남긴 작업처럼,"));
+    }
+
     @Test void titlesThatCannotBeQuotedAreLeftOut() {
         var materials = List.of(new Evidence("material:1:file:1", MaterialType.AI_ASSISTED,
                 "아주 길게 적은 자료 제목이라서 질문에 넣으면 문장이 너무 길어지는 경우", "", null));
