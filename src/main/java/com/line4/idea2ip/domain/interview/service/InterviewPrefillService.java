@@ -14,6 +14,7 @@ import com.line4.idea2ip.integration.ai.AiInterviewClient;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Finding;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.InputText;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.ProjectInputs;
+import com.line4.idea2ip.integration.ai.AiInterviewClient.Work;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -65,21 +66,27 @@ class InterviewPrefillService {
         Snapshot snapshot = transaction.execute(status -> {
             Project project = projects.findById(projectId).orElseThrow();
             var base = readiness.initialFields(readiness.materials(projectId));
-            var stored = prefills.findByProject_ProjectId(projectId)
-                    .filter(prefill -> prefill.getInputRevision() == project.getInputRevision())
-                    .map(InterviewPrefill::getFieldStates).orElse(null);
-            return new Snapshot(project.getInputRevision(), base, stored, inputs(project));
+            var current = prefills.findByProject_ProjectId(projectId)
+                    .filter(prefill -> prefill.getInputRevision() == project.getInputRevision());
+            return new Snapshot(project.getInputRevision(), base, current.map(InterviewPrefill::getFieldStates).orElse(null),
+                    current.isPresent() && current.get().getArtworkElements() == null, inputs(project), elementTexts(project));
         });
-        if (snapshot.stored() != null) return withSources(snapshot.base(), snapshot.stored());
-        if (!read || snapshot.inputs().texts().isEmpty()) return new Prefilled(snapshot.base(), List.of());
+        if (snapshot.stored() != null) {
+            if (read && snapshot.elementsMissing()) recordElements(projectId, snapshot);
+            return withSources(snapshot.base(), snapshot.stored());
+        }
+        if (!read || snapshot.inputs().texts().isEmpty() && snapshot.elementTexts().isEmpty()) {
+            return new Prefilled(snapshot.base(), List.of());
+        }
 
         List<Finding> findings;
         try {
-            findings = ai.findInInputs(snapshot.inputs());
+            findings = snapshot.inputs().texts().isEmpty() ? List.of() : ai.findInInputs(snapshot.inputs());
         } catch (RuntimeException exception) {
             log.warn("Interview AI failed: phase=prefill project={} error={}", projectId, exception.getClass().getSimpleName());
             return new Prefilled(snapshot.base(), List.of());
         }
+        var elements = readElements(projectId, snapshot);
         var states = merge(snapshot.base(), findings);
         try {
             transaction.executeWithoutResult(status -> {
@@ -87,8 +94,8 @@ class InterviewPrefillService {
                 // Descriptions changed while the model read them; the next read starts over.
                 if (project.getInputRevision() != snapshot.revision()) return;
                 prefills.findByProject_ProjectId(projectId).ifPresentOrElse(
-                        prefill -> prefill.update(snapshot.revision(), states),
-                        () -> prefills.save(new InterviewPrefill(project, snapshot.revision(), states)));
+                        prefill -> prefill.update(snapshot.revision(), states, elements),
+                        () -> prefills.save(new InterviewPrefill(project, snapshot.revision(), states, elements)));
                 evidence.deleteInputEvidence(projectId);
                 findings.stream().filter(finding -> finding.status() == Status.COMPLETED)
                         .forEach(finding -> evidence.save(InterviewEvidence.fromInput(
@@ -98,6 +105,36 @@ class InterviewPrefillService {
             log.info("Interview prefill stored by a concurrent request: project={}", projectId);
         }
         return withSources(snapshot.base(), states);
+    }
+
+    /**
+     * The final artwork for questions: its title, description and the elements read from the descriptions. The
+     * elements stored last are used even after the inputs changed, since interview answers also change them.
+     */
+    Work work(Long projectId) {
+        var artwork = artworks.findByProject_ProjectId(projectId).orElse(null);
+        var elements = prefills.findByProject_ProjectId(projectId).map(InterviewPrefill::getArtworkElements).orElse(null);
+        if (artwork == null && elements == null) return Work.NONE;
+        return new Work(artwork == null ? null : artwork.getTitle(), artwork == null ? null : artwork.getDescription(), elements);
+    }
+
+    /** Elements are only wording for questions: a failed read leaves them empty and the questions generic. */
+    private List<String> readElements(Long projectId, Snapshot snapshot) {
+        if (snapshot.elementTexts().isEmpty()) return List.of();
+        try {
+            return ai.findElements(snapshot.elementTexts());
+        } catch (RuntimeException exception) {
+            log.warn("Interview AI failed: phase=elements project={} error={}", projectId, exception.getClass().getSimpleName());
+            return List.of();
+        }
+    }
+
+    /** A revision whose field states were stored before artwork elements existed gets its elements once. */
+    private void recordElements(Long projectId, Snapshot snapshot) {
+        var elements = readElements(projectId, snapshot);
+        transaction.executeWithoutResult(status -> prefills.findByProject_ProjectId(projectId)
+                .filter(prefill -> prefill.getInputRevision() == snapshot.revision() && prefill.getArtworkElements() == null)
+                .ifPresent(prefill -> prefill.recordArtworkElements(elements)));
     }
 
     private static Prefilled withSources(List<InterviewFieldState> base, List<InterviewFieldState> states) {
@@ -137,7 +174,24 @@ class InterviewPrefillService {
         return new ProjectInputs(project.getProjectId(), List.copyOf(texts));
     }
 
+    /** Where the artwork's elements are named: its title and description, and the project description. */
+    private List<InputText> elementTexts(Project project) {
+        var texts = new ArrayList<InputText>();
+        artworks.findByProject_ProjectId(project.getProjectId()).ifPresent(artwork -> {
+            if (StringUtils.hasText(artwork.getTitle())) {
+                texts.add(new InputText("artwork:" + artwork.getArtworkId(), "artwork_title", artwork.getTitle()));
+            }
+            if (StringUtils.hasText(artwork.getDescription())) {
+                texts.add(new InputText("artwork:" + artwork.getArtworkId(), "artwork_description", artwork.getDescription()));
+            }
+        });
+        if (StringUtils.hasText(project.getDescription())) {
+            texts.add(new InputText("project:" + project.getProjectId(), "project_description", project.getDescription()));
+        }
+        return List.copyOf(texts);
+    }
+
     private record Snapshot(long revision, List<InterviewFieldState> base, List<InterviewFieldState> stored,
-                            ProjectInputs inputs) {
+                            boolean elementsMissing, ProjectInputs inputs, List<InputText> elementTexts) {
     }
 }

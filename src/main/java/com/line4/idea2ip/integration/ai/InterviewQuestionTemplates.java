@@ -78,10 +78,71 @@ public final class InterviewQuestionTemplates {
             return new QuestionDraft(InterviewQuestions.unused(field, InterviewQuestions.opening(field, related.get()), asked),
                     InterviewQuestions.OPENING_REASON, List.of());
         }
-        String preferred = toolName(context).map(tool -> withTool(field, tool)).orElse(null);
+        var tool = toolName(context);
+        String preferred = forThisProject(context, field, tool.orElse(null))
+                .orElseGet(() -> tool.map(name -> withTool(field, name)).orElse(null));
         String prompt = InterviewQuestions.unused(field,
                 preferred != null ? preferred : MockAiInterviewClient.baseQuestion(field), asked);
         return withMaterial(context, field, prompt, DEFAULT_REASON);
+    }
+
+    /**
+     * The opening question written for this project: it names the material the field is usually documented by
+     * ("‘구도 시안’ 자료를 만들 때…"), the final artwork's title, and parts of the artwork the user described
+     * ("철교, 세 칸 열차, 강처럼"). Names come from what the user registered; elements are checked against their
+     * descriptions ({@link ArtworkElements}). Empty when the project gives nothing to name, so the generic
+     * question is asked.
+     */
+    static Optional<String> forThisProject(Context context, InterviewField field, String tool) {
+        String material = materialTitle(context, MockAiInterviewClient.referenceType(field)).orElse(null);
+        String artwork = nameable(context.work().title()).orElse(null);
+        var elements = context.work().elements();
+        String parts = elements.isEmpty() ? null : ArtworkElements.listed(elements, ELEMENTS_IN_QUESTION);
+        String question = switch (field) {
+            case AI_TOOL -> material == null ? null : quotedTitle(material) + " 자료를 만들 때 어떤 AI 도구를 사용했나요?";
+            case AI_PURPOSE -> material == null ? null : tool == null
+                    ? quotedTitle(material) + " 자료를 만들 때 AI를 어떤 작업에, 어떤 목적으로 사용했나요?"
+                    : quotedTitle(material) + " 자료를 만들 때 " + tool + " 도구를 어떤 작업에, 어떤 목적으로 사용했나요?";
+            case AI_OUTPUT_USAGE -> artwork == null && parts == null ? null
+                    : (tool == null ? "AI가 만든 결과를" : tool + " 도구로 만든 결과를")
+                    + (artwork == null ? " 최종 작품에" : " 최종 작품 " + quotedTitle(artwork) + "에") + " 넣었나요? 넣었다면 "
+                    + (parts == null ? "" : parts + "처럼 ") + "어느 부분에 어떻게 썼는지 알려주세요.";
+            case HUMAN_CREATED_ELEMENT -> parts != null
+                    ? (artwork == null ? "최종 작품의 " : quotedTitle(artwork) + "의 ") + parts
+                    + " 같은 요소 중 직접 새로 만든 것이 있다면 무엇이고, 어떤 방식으로 만들었나요? 없다면 없다고 알려주세요."
+                    : artwork == null ? null : "최종 작품 " + quotedTitle(artwork)
+                    + "에서 직접 새로 만든 요소가 있다면 무엇이고, 어떤 방식으로 만들었나요? 없다면 없다고 알려주세요.";
+            case HUMAN_EDITED_EXPRESSION -> material != null
+                    ? quotedTitle(material) + " 자료에 남긴 작업처럼, 직접 수정하거나 추가한 표현이 있다면 무엇을 어떻게 작업했나요? "
+                    + "없다면 없다고 알려주세요."
+                    : parts == null ? null : (artwork == null ? "최종 작품의 " : quotedTitle(artwork) + "의 ") + parts
+                    + " 중 직접 수정하거나 덧붙인 표현이 있다면 무엇을 어떻게 작업했나요? 없다면 없다고 알려주세요.";
+        };
+        return Optional.ofNullable(question);
+    }
+
+    private static final int ELEMENTS_IN_QUESTION = 3;
+    private static final int TITLE_MAX = 30;
+
+    private static String quotedTitle(String title) {
+        return "‘" + title + "’";
+    }
+
+    /** The first registered material of {@code type} whose title can be quoted in a question. */
+    private static Optional<String> materialTitle(Context context, MaterialType type) {
+        return context.evidence().stream().filter(source -> source.type() == type)
+                .map(Evidence::title).map(InterviewQuestionTemplates::nameable)
+                .flatMap(Optional::stream).findFirst();
+    }
+
+    /** A title short enough to quote, without quotes or line breaks of its own. */
+    private static Optional<String> nameable(String title) {
+        if (title == null) return Optional.empty();
+        String value = title.strip().replaceAll("\\s+", " ");
+        if (value.isEmpty() || value.codePointCount(0, value.length()) > TITLE_MAX || value.matches(".*[‘’“”\"'].*")) {
+            return Optional.empty();
+        }
+        return Optional.of(value);
     }
 
     /** AI questions name the tool already given, so they follow on from the tool answer. */

@@ -47,6 +47,7 @@ CHECK_LABELS = {
     "must_skip": "생략해야 할 항목을 묻지 않음",
     "min_asks": "다시 물어야 할 항목을 다시 물음",
     "max_asks": "이미 답한 항목을 다시 묻지 않음",
+    "mentions_project": "항목의 첫 질문에 프로젝트의 자료·작품 이름이나 요소가 들어감",
     "ask_limit": f"한 항목 최대 {MAX_ASKS_PER_FIELD}회",
     "final_states": "최종 항목 상태",
     "final_summaries": "최종 항목 요약",
@@ -243,6 +244,13 @@ def score(scenario, transcript):
     if scenario.get("maxAsks"):
         extra = [f"{f} {asks[f]}/{n}" for f, n in scenario["maxAsks"].items() if asks[f] > n]
         checks["max_asks"] = (not extra, ", ".join(extra))
+    if scenario.get("mustMention"):
+        generic = []
+        for f, words in scenario["mustMention"].items():
+            first = next((t["question"] for t in turns if t["field"] == f), None)
+            if first is not None and not any(word in first for word in words):
+                generic.append(f"{f}: {first[:40]}")
+        checks["mentions_project"] = (not generic, " / ".join(generic))
     over = [f"{f} {n}회" for f, n in asks.items() if n > MAX_ASKS_PER_FIELD]
     checks["ask_limit"] = (not over, ", ".join(over))
     if scenario.get("expectFinal"):

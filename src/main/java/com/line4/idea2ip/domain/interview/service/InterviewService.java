@@ -26,6 +26,7 @@ import com.line4.idea2ip.integration.ai.AiInterviewClient.Evidence;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.Finding;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.PreviousTurn;
 import com.line4.idea2ip.integration.ai.AiInterviewClient.QuestionDraft;
+import com.line4.idea2ip.integration.ai.AiInterviewClient.Work;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -132,8 +133,11 @@ public class InterviewService {
 
         var prefilled = prefill.fields(projectId, true);
         var fields = prefilled.fields();
+        // The elements may have been read just now, after the base context was taken.
+        Work work = transaction.execute(status -> prefill.work(projectId));
         InterviewField first = nextField(fields);
-        QuestionDraft question = first == null ? null : generateQuestion(withFields(base, fields), first, null);
+        QuestionDraft question = first == null ? null
+                : generateQuestion(withWork(withFields(base, fields), work), first, null);
         String leadIn = first == null ? "" : InterviewTransitions.leadIn(null, first, prefilled.fromDescription(), true);
         Started started = transaction.execute(status -> {
             Project project = projects.getOwnedProjectForUpdate(userId, projectId);
@@ -380,12 +384,17 @@ public class InterviewService {
                         InterviewTransitions.body(answer.getReplyToQuestion().getContent()), answer.getContent()))
                 .toList();
         return new Context(project.getProjectId(), project.getTitle(), UUID.randomUUID().toString(),
-                answers, evidence, questions, turns, fields);
+                answers, evidence, questions, turns, fields, prefill.work(project.getProjectId()));
     }
 
     private static Context withFields(Context context, List<InterviewFieldState> fields) {
         return new Context(context.projectId(), context.title(), context.snapshotVersion(), context.answers(),
-                context.evidence(), context.questions(), context.turns(), List.copyOf(fields));
+                context.evidence(), context.questions(), context.turns(), List.copyOf(fields), context.work());
+    }
+
+    private static Context withWork(Context context, Work work) {
+        return new Context(context.projectId(), context.title(), context.snapshotVersion(), context.answers(),
+                context.evidence(), context.questions(), context.turns(), context.fields(), work);
     }
 
     private QuestionDraft generateQuestion(Context context, InterviewField target, String clarification) {
