@@ -268,11 +268,29 @@ public class InterviewService {
             return ai.findInAnswer(context, answer, open, List.copyOf(claimed)).stream()
                     .filter(finding -> open.contains(finding.field()) && finding.status() == Status.COMPLETED
                             && answer.content().contains(finding.quote()))
+                    .filter(finding -> {
+                        boolean taken = takesAskedEvidence(finding.quote(), answer);
+                        if (taken) log.info("Interview finding dropped: field={} holds the evidence of {}", finding.field(), answer.field());
+                        return !taken;
+                    })
                     .toList();
         } catch (RuntimeException exception) {
             log.warn("Interview AI failed: phase=findings field={} error={}", answer.field(), exception.getClass().getSimpleName());
             return List.of();
         }
+    }
+
+    /**
+     * Whether a finding would take all of the asked field's evidence. Deployed: "고양이와 해바라기를 직접 그렸습니다.
+     * 연필로 윤곽을 잡고 수채 브러시로 칠했습니다." answered the creation question and was also taken as the edit
+     * field's evidence, so edits were never asked and one sentence stood for both. A finding may take some sentences
+     * of the answer (the asked field's quote is then narrowed), never all of what the asked field rests on. The tool
+     * field is exempt: its quote is only the tool name, which a purpose sentence naturally repeats.
+     */
+    static boolean takesAskedEvidence(String findingQuote, Answer answer) {
+        if (answer.field() == InterviewField.AI_TOOL || findingQuote == null) return false;
+        String asked = answer.evidenceQuote();
+        return StringUtils.hasText(asked) && findingQuote.contains(asked.strip());
     }
 
     private static List<InterviewFieldState> applyFindings(List<InterviewFieldState> fields, List<Finding> findings) {

@@ -99,10 +99,10 @@ public final class InterviewQuestionTemplates {
         var elements = context.work().elements();
         String parts = elements.isEmpty() ? null : ArtworkElements.listed(elements, ELEMENTS_IN_QUESTION);
         String question = switch (field) {
-            case AI_TOOL -> material == null ? null : quotedTitle(material) + " 자료를 만들 때 어떤 AI 도구를 사용했나요?";
+            case AI_TOOL -> material == null ? null : asMaterial(material) + "를 만들 때 어떤 AI 도구를 사용했나요?";
             case AI_PURPOSE -> material == null ? null : tool == null
-                    ? quotedTitle(material) + " 자료를 만들 때 AI를 어떤 작업에, 어떤 목적으로 사용했나요?"
-                    : quotedTitle(material) + " 자료를 만들 때 " + tool + " 도구를 어떤 작업에, 어떤 목적으로 사용했나요?";
+                    ? asMaterial(material) + "를 만들 때 AI를 어떤 작업에, 어떤 목적으로 사용했나요?"
+                    : asMaterial(material) + "를 만들 때 " + tool + " 도구를 어떤 작업에, 어떤 목적으로 사용했나요?";
             case AI_OUTPUT_USAGE -> artwork == null && parts == null ? null
                     : (tool == null ? "AI가 만든 결과를" : tool + " 도구로 만든 결과를")
                     + (artwork == null ? " 최종 작품에" : " 최종 작품 " + quotedTitle(artwork) + "에") + " 넣었나요? 넣었다면 "
@@ -113,7 +113,7 @@ public final class InterviewQuestionTemplates {
                     : artwork == null ? null : "최종 작품 " + quotedTitle(artwork)
                     + "에서 직접 새로 만든 요소가 있다면 무엇이고, 어떤 방식으로 만들었나요? 없다면 없다고 알려주세요.";
             case HUMAN_EDITED_EXPRESSION -> material != null
-                    ? quotedTitle(material) + " 자료에 남긴 작업처럼, 직접 수정하거나 추가한 표현이 있다면 무엇을 어떻게 작업했나요? "
+                    ? asMaterial(material) + "에 남긴 작업처럼, 직접 수정하거나 추가한 표현이 있다면 무엇을 어떻게 작업했나요? "
                     + "없다면 없다고 알려주세요."
                     : parts == null ? null : (artwork == null ? "최종 작품의 " : quotedTitle(artwork) + "의 ") + parts
                     + " 중 직접 수정하거나 덧붙인 표현이 있다면 무엇을 어떻게 작업했나요? 없다면 없다고 알려주세요.";
@@ -126,6 +126,11 @@ public final class InterviewQuestionTemplates {
 
     private static String quotedTitle(String title) {
         return "‘" + title + "’";
+    }
+
+    /** "‘구도 시안’ 자료", but "‘캔 뚜껑 색 수정 전후 자료’" for a title that already ends in 자료. Ends in a vowel. */
+    private static String asMaterial(String title) {
+        return title.endsWith("자료") ? quotedTitle(title) : quotedTitle(title) + " 자료";
     }
 
     /** The first registered material of {@code type} whose title can be quoted in a question. */

@@ -60,6 +60,16 @@
       }
     },
     {
+      "id": "creation-not-edit",
+      "title": "직접 제작 답변의 ‘칠했습니다’가 직접 수정 항목까지 채우지 않음",
+      "phase": 0,
+      "answers": {
+        "HUMAN_CREATED_ELEMENT": ["사과 단면과 뒤쪽 곡선을 직접 그렸습니다. 연필로 윤곽을 잡고 수채 브러시로 칠했습니다."]
+      },
+      "mustSkip": [],
+      "mustAsk": ["HUMAN_CREATED_ELEMENT", "HUMAN_EDITED_EXPRESSION"]
+    },
+    {
       "id": "typo-full",
       "title": "오타 섞인 첫 답변에 도구·목적·활용 여부가 모두 있음",
       "phase": 0,
