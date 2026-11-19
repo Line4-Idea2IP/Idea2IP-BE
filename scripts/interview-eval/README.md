@@ -44,6 +44,7 @@ python -I scripts/interview-eval/run_eval.py --base-url http://127.0.0.1:18081 -
 | 생략해야 할 항목을 묻지 않음 | 시나리오의 `mustSkip` 항목을 물음 |
 | 다시 물어야 할 항목을 다시 물음 | `minAsks` 횟수보다 적게 물음 |
 | 이미 답한 항목을 다시 묻지 않음 | `maxAsks` 횟수보다 많이 물음 |
+| 첫 질문에 프로젝트 이름이나 요소가 들어감 | `mustMention` 항목의 첫 질문에 지정한 낱말이 하나도 없음 |
 | 한 항목 최대 3회 | 한 항목을 4번 이상 물음 |
 | 최종 항목 상태 / 시작 전 항목 상태 | `expectFinal` / `expectReadiness`와 다름 |
 | 최종 항목 요약 | 최종 요약이 `expectSummary`와 다름 (도구 확인 질문 뒤 ‘Sora’로 정리됐는지 등) |
@@ -58,6 +59,6 @@ python -I scripts/interview-eval/run_eval.py --base-url http://127.0.0.1:18081 -
 
 - `answers`: 항목별 답변 목록. 같은 항목을 다시 물으면 다음 답변을 쓰고, 목록이 끝나면 마지막 답변을 반복합니다.
 - `phase`: 이 시나리오가 통과해야 하는 재설계 단계. `--phase`보다 큰 시나리오는 실행하되 ‘예정’으로 표시하고 종료 코드에 반영하지 않습니다.
-- `mustAsk`, `mustSkip`, `minAsks`, `maxAsks`, `expectFinal`, `expectSummary`, `expectReadiness`: 위 검사의 기대 결과.
+- `mustAsk`, `mustSkip`, `minAsks`, `maxAsks`, `mustMention`, `expectFinal`, `expectSummary`, `expectReadiness`: 위 검사의 기대 결과.
 
 시나리오는 실제로 문제가 났던 입력에서 만듭니다. 오판을 고칠 때는 먼저 그 입력을 시나리오로 추가해 실패하는 것을 확인한 뒤 고칩니다.

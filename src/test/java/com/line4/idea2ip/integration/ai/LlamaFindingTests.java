@@ -257,4 +257,16 @@ class LlamaFindingTests {
         assertTrue(client(reply).findInInputs(new ProjectInputs(1L, List.of(
                 new InputText("artwork:3", "artwork_description", description)))).isEmpty());
     }
+
+    @Test void artworkElementsAreKeptOnlyWhenTheUserWroteThem() throws IOException {
+        String reply = JSON.writeValueAsString(Map.of("elements", List.of("철교", "세 칸 열차", "달", "작품", "열차")));
+
+        var elements = client(reply).findElements(List.of(
+                new InputText("artwork:3", "artwork_title", "막차가 건너는 저녁"),
+                new InputText("artwork:3", "artwork_description", "해 질 무렵 철교 위를 지나는 세 칸 열차를 그린 작품입니다.")));
+
+        assertEquals(List.of("철교", "세 칸 열차"), elements, "the moon was not written; 작품 names the whole work");
+        assertEquals(List.of("InterviewArtworkElements"), schemas);
+        assertFalse(inputs.getFirst().toString().contains("artwork:3"), "only the text is sent, not internal ids");
+    }
 }

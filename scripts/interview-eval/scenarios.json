@@ -45,6 +45,21 @@
   },
   "scenarios": [
     {
+      "id": "project-specific",
+      "title": "질문에 이 프로젝트의 자료 이름, 작품 제목, 작품 요소가 들어감",
+      "phase": 0,
+      "answers": {},
+      "mustSkip": [],
+      "mustAsk": ["AI_TOOL", "AI_OUTPUT_USAGE", "HUMAN_EDITED_EXPRESSION"],
+      "mustMention": {
+        "AI_TOOL": ["사과와 캔 배치 비교 시안"],
+        "AI_PURPOSE": ["사과와 캔 배치 비교 시안"],
+        "AI_OUTPUT_USAGE": ["사과와 은빛 음료 캔", "사과", "음료 캔"],
+        "HUMAN_CREATED_ELEMENT": ["사과와 은빛 음료 캔", "사과", "음료 캔", "곡선"],
+        "HUMAN_EDITED_EXPRESSION": ["캔 뚜껑 색 수정 전후 자료", "캔 뚜껑", "음료 캔"]
+      }
+    },
+    {
       "id": "typo-full",
       "title": "오타 섞인 첫 답변에 도구·목적·활용 여부가 모두 있음",
       "phase": 0,

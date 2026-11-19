@@ -37,13 +37,25 @@ public class InterviewPrefill extends BaseEntity {
     @Column(nullable = false)
     private List<InterviewFieldState> fieldStates;
 
-    public InterviewPrefill(Project project, long inputRevision, List<InterviewFieldState> fieldStates) {
+    /** Parts of the artwork named in the descriptions, for questions about this artwork; null when not read yet. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "artwork_elements")
+    private List<String> artworkElements;
+
+    public InterviewPrefill(Project project, long inputRevision, List<InterviewFieldState> fieldStates,
+                            List<String> artworkElements) {
         this.project = project;
-        update(inputRevision, fieldStates);
+        update(inputRevision, fieldStates, artworkElements);
     }
 
-    public void update(long inputRevision, List<InterviewFieldState> fieldStates) {
+    public void update(long inputRevision, List<InterviewFieldState> fieldStates, List<String> artworkElements) {
         this.inputRevision = inputRevision;
         this.fieldStates = List.copyOf(fieldStates);
+        this.artworkElements = artworkElements == null ? null : List.copyOf(artworkElements);
+    }
+
+    /** Elements read later for a revision whose field states were stored before elements were read. */
+    public void recordArtworkElements(List<String> artworkElements) {
+        this.artworkElements = List.copyOf(artworkElements);
     }
 }
